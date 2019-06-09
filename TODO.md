@@ -1,0 +1,6 @@
+- [] Extract features from Squad 2.0 per https://github.com/google-research/bert#using-bert-to-extract-fixed-feature-vectors-like-elmo
+- [] Set up simple CNN to consume these features
+- [] Calculate logits and loss for answers
+- [] Run the simple CNN and verify it trains
+- [] Run a more complex CNN and try to attain score of 85+.
+- [] Attempt create context aware bdrectional CNN
