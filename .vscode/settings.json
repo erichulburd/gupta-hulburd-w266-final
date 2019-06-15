@@ -5,7 +5,7 @@
   "python.linting.flake8Enabled": true,
   "python.linting.enabled": true,
   "editor.formatOnSave": true,
-  "python.linting.flake8Path": "/Library/Frameworks/Python.framework/Versions/3.6/bin/flake8",
-  "python.formatting.yapfPath": "/Library/Frameworks/Python.framework/Versions/3.6/bin/yapf",
+  "python.linting.flake8Path": "env/bin/flake8",
+  "python.formatting.yapfPath": "env/bin/yapf",
   "editor.tabSize": 4
 }

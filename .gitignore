@@ -1,6 +1,6 @@
 env/
 tmp/
 data/
-output/
+out/
 .DS_store
 
