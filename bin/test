@@ -1,0 +1,4 @@
+#! /bin/bash
+
+PYTHONPATH=. python tests/test_cnn_gan.py
+PYTHONPATH=. python tests/test_embeddings.py
