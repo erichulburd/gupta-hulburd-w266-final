@@ -3,14 +3,10 @@ from datetime import datetime
 import json
 from bert.modeling import get_assignment_map_from_checkpoint, get_shape_list, BertConfig
 from bert.optimization import create_optimizer
-from utils import MAX_SEQ_LENGTH, input_fn_builder
-
-# [X] Read in data
-# [X] pass through conv2d_transpose (output A)
-# [X] pass output A over input data
-# [X] compute logits
-# [X] compute loss
-# [ ] optimize and train
+from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
+                   compute_weighted_batch_accuracy)
+from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
+from models.cnn import CNNConfig, create_cnn_model
 
 flags = tf.flags
 
@@ -24,7 +20,7 @@ flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
 
 flags.DEFINE_string("init_checkpoint", None, '')
 
-flags.DEFINE_string("output_dir", "out/features/%s" % datetime.now().isoformat(),
+flags.DEFINE_string("output_dir", "out/%s" % datetime.now().isoformat(),
                     "The output directory where the model checkpoints will be written.")
 
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
@@ -69,6 +65,7 @@ flags.DEFINE_integer("num_tpu_cores", 8,
                      "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
 flags.DEFINE_string("tf_record", "train", "Name of tf_record file to use for input")
+flags.DEFINE_string("config", "config.json", "JSON file with model configuration.")
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
@@ -78,159 +75,42 @@ INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
-N_TRAIN_EXAMPLES = 1000
+N_TRAIN_EXAMPLES = 10
+
+tf.gfile.MakeDirs(OUTPUT_DIR)
+
+bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
 
 
-class CNNGANConfig:
-    depth: int
-    deconv_channels_out: int
-    max_seq_length: int
-
-    def __init__(self, depth: int, deconv_channels_out: int, max_seq_length: int):
-        self.depth = depth
-        self.deconv_channels_out = deconv_channels_out
-        self.max_seq_length = max_seq_length
-
-
-def make_cnn_gan_config(filename: str):
+def load_and_save_config(filename: str):
     with open(filename) as json_data:
         parsed = json.load(json_data)
         parsed['max_seq_length'] = FLAGS.max_seq_length
-        return CNNGANConfig(**parsed)
+        parsed['bert_config'] = bert_config.to_dict()
+
+        with open('%s/config.json' % OUTPUT_DIR, 'w') as f:
+            json.dump(parsed, f)
+        parsed['bert_config'] = bert_config
+
+        create_model = None
+        config_class = None
+        if parsed['model'] == 'lstm':
+            config_class = LSTMConfig
+            create_model = create_rnn_lstm_model
+        elif parsed['model'] == 'cnn':
+            config_class = CNNConfig
+            create_model = create_cnn_model
+        else:
+            raise ValueError('No supported model %s' % parsed['model'])
+
+        return (config_class(**parsed), create_model)
 
 
-bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
-cnn_gan_config = make_cnn_gan_config('cnn_gan_config.json')
-
-
-class PerSampleCNN:
-    """
-    Inspired by https://stackoverflow.com/questions/42068999/tensorflow-convolutions-with-different-filter-for-each-sample-in-the-mini-batch#42086729
-    """
-
-    def __init__(
-            self,
-            # shape (batch_size, seq_length, hidden_depth, channels_in)
-            inpt: tf.Tensor,
-            # shape (batch_size, filter_height, filter_width, channels_in, channels_out)
-            filters: tf.Tensor):
-        self.input = inpt
-        self.filters = filters
-
-    def _validate(self):
-        assert len(self.input.shape) == 4
-        assert len(self.filters.shape) == 5
-        # batch_size should match
-        assert self.input.shape[0] == self.filters.shape[0]
-        # sequence length should be gte than filter height
-        assert self.input.shape[1] >= self.filters.shape[1]
-        # input hidden depth should equal filter width in NLP context
-        assert self.input.shape[2] == self.filters.shape[2]
-        # channels in should match.
-        assert self.input.shape[3] == self.filters.shape[3]
-
-    def apply(self):
-        self._validate()
-
-        batch_size = self.input.shape[0]
-        seq_length = self.input.shape[1]
-        filter_height = self.filters.shape[1]
-        width = self.input.shape[2]
-        channels_in = self.input.shape[3]
-        channels_out = self.filters.shape[4]
-
-        virtual_channels_in = batch_size * channels_in
-
-        filters = tf.transpose(self.filters, [1, 2, 0, 3, 4])
-        filters = tf.reshape(filters, [filter_height, width, virtual_channels_in, channels_out])
-
-        inpt = tf.transpose(self.input, [1, 2, 0, 3])  # shape (H, W, MB, channels_in)
-        inpt = tf.reshape(inpt, [1, seq_length, width, virtual_channels_in])
-
-        out = tf.nn.depthwise_conv2d(inpt, filter=filters, strides=[1, 1, 1, 1], padding="SAME")
-
-        out = tf.reshape(out, [seq_length, width, batch_size, channels_in, channels_out])
-
-        out = tf.transpose(out, [2, 0, 1, 3, 4])
-        # sum over channels_in
-        out = tf.reduce_sum(out, axis=3)
-        # sum over width (ie hidden depth)
-        return tf.reduce_sum(out, axis=2)
-
-
-def _create_model(bert_config, is_training, token_embeddings, segment_ids,
-                  cnn_gan_config: CNNGANConfig):
-    """Creates a classification model."""
-
-    input_shape = get_shape_list(token_embeddings, expected_rank=3)
-    batch_size = input_shape[0]
-    seq_length = input_shape[1]
-    assert cnn_gan_config.depth <= seq_length
-    hidden_size = input_shape[2]
-
-    channels_in = 1
-    channels_out = cnn_gan_config.deconv_channels_out
-    deconv_filter = tf.get_variable('cls/deconv/filter',
-                                    [seq_length, hidden_size, channels_out, channels_in],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.02))
-
-    # We want to set the input question values to 0, so they are not considered for
-    # start and stop indices (segment_ids are 0 for question, 1 for answer).
-    paragraphs = mask_questions(token_embeddings, segment_ids, hidden_size)
-
-    token_embeddings = tf.reshape(token_embeddings,
-                                  [batch_size, seq_length, hidden_size, channels_in])
-    output_shape = tf.constant([batch_size, seq_length, hidden_size, channels_out], dtype=tf.int32)
-    # See https://github.com/vdumoulin/conv_arithmetic for a good explanation
-    deconv = tf.nn.conv2d_transpose(
-        token_embeddings,
-        filter=deconv_filter,
-        output_shape=output_shape,
-        strides=[1, 1, 1, 1],
-        # dilations=[1, 1, 1, 1],
-        data_format='NHWC',
-        name='deconv')
-    # Apply the deconvolutional layer over the paragraphs. Add bias add and RELU layer.
-    ps_conv = PerSampleCNN(
-        inpt=tf.reshape(paragraphs, [batch_size, seq_length, hidden_size, channels_in]),
-        # F has shape (batch_size, filter_height, filter_width, channels_in, channels_out)
-        filters=tf.reshape(deconv,
-                           [batch_size, seq_length, hidden_size, channels_in, channels_out]))
-    conv = ps_conv.apply()
-    conv_bias = tf.get_variable("cls/squad/output_bias", [channels_out],
-                                initializer=tf.zeros_initializer())
-    conv = conv + conv_bias
-    conv = tf.nn.relu(conv)
-
-    n_positions = 2  # start and end logits
-    wd1 = tf.Variable(tf.truncated_normal([channels_out, n_positions], stddev=0.03), name='wd1')
-    bd1 = tf.Variable(tf.truncated_normal([n_positions], stddev=0.01), name='bd1')
-
-    conv = tf.reshape(conv, [batch_size * seq_length, channels_out])
-
-    logits = tf.matmul(conv, wd1)
-    logits = tf.nn.bias_add(logits, bd1)
-
-    print(logits.shape)
-    logits = tf.reshape(logits, [batch_size, seq_length, n_positions])
-    logits = tf.transpose(logits, [2, 0, 1])
-
-    unstacked_logits = tf.unstack(logits, axis=0)
-
-    (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
-
-    return (start_logits, end_logits)
-
-
-def mask_questions(token_embeddings, segment_ids, hidden_depth):
-    full_segment_ids = tf.cast(segment_ids, tf.float32)
-    full_segment_ids = tf.expand_dims(full_segment_ids, axis=2)
-    full_segment_ids = tf.keras.backend.repeat_elements(full_segment_ids, hidden_depth, axis=2)
-    return tf.multiply(token_embeddings, full_segment_ids)
+(config, create_model) = load_and_save_config(FLAGS.config)
 
 
 def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_steps, num_warmup_steps,
-                     use_tpu, cnn_gan_config: CNNGANConfig):
+                     use_tpu, config):
     """Returns `model_fn` closure for TPUEstimator."""
 
     def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
@@ -242,13 +122,11 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
 
         unique_ids = features["unique_ids"]
         input_ids = features["input_ids"]
-        segment_ids = features["segment_ids"]
         token_embeddings = features["token_embeddings"]
 
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
-        (start_logits, end_logits) = _create_model(bert_config, is_training, token_embeddings,
-                                                   segment_ids, cnn_gan_config)
+        (start_logits, end_logits) = create_model(is_training, token_embeddings, config)
 
         tvars = tf.trainable_variables()
 
@@ -275,8 +153,10 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
             tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape, init_string)
 
         output_spec = None
+
+        seq_length = get_shape_list(input_ids)[1]
+
         if mode == tf.estimator.ModeKeys.TRAIN:
-            seq_length = get_shape_list(input_ids)[1]
 
             def compute_loss(logits, positions):
                 one_hot_positions = tf.one_hot(positions, depth=seq_length, dtype=tf.float32)
@@ -292,15 +172,44 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
 
             total_loss = (start_loss + end_loss) / 2.0
 
+            tf.summary.scalar("start_loss", start_loss)
+            tf.summary.scalar("end_loss", end_loss)
+            tf.summary.scalar("total_loss", total_loss)
+
+            tf.summary.scalar("start_accuracy",
+                              compute_batch_accuracy(start_logits, start_positions))
+            tf.summary.scalar("end_accuracy", compute_batch_accuracy(end_logits, end_positions))
+            tf.summary.scalar("start_weighted5_accuracy",
+                              compute_weighted_batch_accuracy(start_logits, start_positions, k=5))
+            tf.summary.scalar("end_weighted5_accuracy",
+                              compute_weighted_batch_accuracy(end_logits, end_positions, k=5))
+
             # NOTE: We are using BERT's AdamWeightDecayOptimizer. We may want to reconsider
             # this if we are not able to effectively train.
             train_op = create_optimizer(total_loss, learning_rate, num_train_steps,
                                         num_warmup_steps, use_tpu)
 
+            summaries = tf.train.SummarySaverHook(
+                save_steps=1,
+                output_dir=OUTPUT_DIR,
+                summary_op=tf.compat.v1.summary.merge_all(),
+            )
             output_spec = tf.contrib.tpu.TPUEstimatorSpec(mode=mode,
                                                           loss=total_loss,
                                                           train_op=train_op,
+                                                          training_hooks=[summaries],
                                                           scaffold_fn=scaffold_fn)
+        elif mode == tf.estimator.ModeKeys.EVAL:
+            # inference_model = initialize_inference_model(hypes)
+            eval_metric_ops = {
+                "start_loss": start_loss,
+                "end_loss": end_loss,
+                'total_loss': total_loss
+            }
+            output_spec = tf.estimator.EstimatorSpec(mode,
+                                                     loss=total_loss,
+                                                     eval_metric_ops=eval_metric_ops)
+
         elif mode == tf.estimator.ModeKeys.PREDICT:
             predictions = {
                 "unique_ids": unique_ids,
@@ -321,8 +230,6 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
 def main(_):
     tf.logging.set_verbosity(tf.logging.INFO)
 
-    tf.gfile.MakeDirs(OUTPUT_DIR)
-
     tpu_cluster_resolver = None
     if FLAGS.use_tpu and FLAGS.tpu_name:
         tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
@@ -334,6 +241,8 @@ def main(_):
                                           per_host_input_for_training=is_per_host)
     run_config = tf.contrib.tpu.RunConfig(cluster=tpu_cluster_resolver,
                                           master=FLAGS.master,
+                                          log_step_count_steps=1,
+                                          save_summary_steps=2,
                                           model_dir=FLAGS.output_dir,
                                           save_checkpoints_steps=FLAGS.save_checkpoints_steps,
                                           tpu_config=tpu_config)
@@ -349,7 +258,7 @@ def main(_):
                                 learning_rate=FLAGS.learning_rate,
                                 num_train_steps=num_train_steps,
                                 num_warmup_steps=num_warmup_steps,
-                                cnn_gan_config=cnn_gan_config,
+                                config=config,
                                 use_tpu=FLAGS.use_tpu)
 
     # If TPU is not available, this will fall back to normal Estimator on CPU

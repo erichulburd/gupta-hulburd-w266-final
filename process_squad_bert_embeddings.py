@@ -25,7 +25,6 @@ import random
 
 from bert import modeling, tokenization
 import six
-from utils import flat_map_create_float_feature
 import tensorflow as tf
 
 flags = tf.app.flags
@@ -518,7 +517,7 @@ class FeatureWriter(object):
         features["input_ids"] = create_int_feature(feature.input_ids)
         features["input_mask"] = create_int_feature(feature.input_mask)
         features["segment_ids"] = create_int_feature(feature.segment_ids)
-        features["token_embeddings"] = flat_map_create_float_feature(token_embeddings)
+        features["token_embeddings"] = _flat_map_create_float_feature(token_embeddings)
 
         if self.is_training:
             features["start_positions"] = create_int_feature([feature.start_position])
@@ -547,6 +546,11 @@ def validate_flags_or_throw(bert_config):
     if FLAGS.max_seq_length <= FLAGS.max_query_length + 3:
         raise ValueError("The max_seq_length (%d) must be greater than max_query_length "
                          "(%d) + 3" % (FLAGS.max_seq_length, FLAGS.max_query_length))
+
+
+def _flat_map_create_float_feature(values):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=list(
+        [embedding_value for token_embeddings in values for embedding_value in token_embeddings])))
 
 
 def main(_):
@@ -605,14 +609,10 @@ def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu, use_o
                 init_string = ", *INIT_FROM_CKPT*"
             tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape, init_string)
 
-        all_layers = model.get_all_encoder_layers()
-
         predictions = {
             "unique_id": unique_ids,
+            'sequence_output': model.get_sequence_output(),
         }
-
-        for (i, layer_index) in enumerate(layer_indexes):
-            predictions["layer_output_%d" % i] = all_layers[layer_index]
 
         output_spec = tf.contrib.tpu.TPUEstimatorSpec(mode=mode,
                                                       predictions=predictions,
@@ -687,7 +687,6 @@ def write_features(input_file: str, output_file: str, is_training: bool):
 
     # STEP 2: initialize BERT model to extract token embeddings.
     layer_indexes = [-1]
-    final_output_layer_index = 0
 
     model_fn = model_fn_builder(bert_config=bert_config,
                                 init_checkpoint=INIT_CHECKPOINT,
@@ -723,18 +722,7 @@ def write_features(input_file: str, output_file: str, is_training: bool):
         ct += 1
         unique_id = int(result["unique_id"])
         feature = unique_id_to_feature[unique_id]
-
-        token_embeddings = []
-        zeros = [0 for j in range(bert_config.hidden_size)]
-        for (i, token) in enumerate(feature.tokens):
-            final_layer_output = result["layer_output_%d" % final_output_layer_index]
-            final_layer_output_values = [
-                round(float(x), 6) for x in final_layer_output[i:(i + 1)].flat
-            ]
-            token_embeddings.append(final_layer_output_values)
-        for i in range(FLAGS.max_seq_length - len(feature.tokens)):
-            token_embeddings.append(zeros)
-        writer.process_feature(feature, token_embeddings)
+        writer.process_feature(feature, result["sequence_output"])
 
         if ct % 1000 == 0:
             print('%d examples processed', ct)
