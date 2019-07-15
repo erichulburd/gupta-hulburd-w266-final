@@ -1,8 +1,12 @@
-BERT_LARGE_DIR="gs://suhas-gupta-bucket/BERT_BASE_DIR"
-SQUAD_DIR="gs://suhas-gupta-bucket/SQUAD_DIR"
-OUT_DIR="gs://suhas-gupta-bucket/out"
-TPU_NAME="suhas-gupta"
+#!/bin/sh -f
 
+BERT_LARGE_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/BERT_BASE_DIR' 
+SQUAD_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/SQUAD_DATA' 
+OUTPUT_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/out' 
+
+echo $BERT_LARGE_DIR 
+echo $SQUAD_DIR
+echo $OUTPUT_DIR
 
 python bert/run_squad.py \
   --vocab_file=$BERT_LARGE_DIR/vocab.txt \
@@ -15,10 +19,8 @@ python bert/run_squad.py \
   --train_batch_size=24 \
   --learning_rate=3e-5 \
   --num_train_epochs=2.0 \
-  --max_seq_length=384 \
+  --max_seq_length=128 \
   --doc_stride=128 \
-  --output_dir=$OUT_DIR \
-  --use_tpu=True \
-  --tpu_name=$TPU_NAME \
+  --output_dir=$OUTPUT_DIR \
+  --use_tpu=False \
   --version_2_with_negative=True
-
