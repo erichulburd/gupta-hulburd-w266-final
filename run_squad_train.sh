@@ -8,7 +8,7 @@ echo $BERT_LARGE_DIR
 echo $SQUAD_DIR
 echo $OUTPUT_DIR
 
-python bert/run_squad.py \
+python3 bert/run_squad.py \
   --vocab_file=$BERT_LARGE_DIR/vocab.txt \
   --bert_config_file=$BERT_LARGE_DIR/bert_config.json \
   --init_checkpoint=$BERT_LARGE_DIR/bert_model.ckpt \
@@ -22,5 +22,5 @@ python bert/run_squad.py \
   --max_seq_length=128 \
   --doc_stride=128 \
   --output_dir=$OUTPUT_DIR \
-  --use_tpu=False \
+  --use_tpu=True \
   --version_2_with_negative=True

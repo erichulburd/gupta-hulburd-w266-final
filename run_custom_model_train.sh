@@ -1,6 +1,6 @@
 #!/bin/sh -f
 
-#TPU_NAME="suhas-gupta"
+TPU_NAME="suhas-gupta-3"
 MASTER_URL="grpc://10.0.101.2:8470"
 TPU_ZONE="asia-east1-c"
 GCP_PROJECT="w266"
@@ -12,7 +12,7 @@ GCP_PROJECT="w266"
     --do_train=True\
     --num_train_examples=100\
     --num_train_epochs=1\
-    --use_tpu=True\
-    --tpu_zone=$TPU_ZONE\
+    --use_tpu=False\
     --master=$MASTER_URL\
-    --gcp_project=$GCP_PROJECT
+    --tpu_zone=$TPU_ZONE\
+    --gcp_project=$GCP_PROJECT\
