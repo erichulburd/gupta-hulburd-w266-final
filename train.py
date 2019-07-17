@@ -7,6 +7,7 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
                    compute_weighted_batch_accuracy)
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
+from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
 
 flags = tf.flags
 
@@ -32,7 +33,7 @@ flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for prediction."
 
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
-flags.DEFINE_float("num_train_epochs", 3.0, "Total number of training epochs to perform.")
+flags.DEFINE_float("num_train_epochs", 20, "Total number of training epochs to perform.")
 
 flags.DEFINE_float(
     "warmup_proportion", 0.1, "Proportion of training to perform linear learning rate warmup for. "
@@ -100,6 +101,9 @@ def load_and_save_config(filename: str):
         elif parsed['model'] == 'cnn':
             config_class = CNNConfig
             create_model = create_cnn_model
+        elif parsed['model'] == 'cnn_gan':
+            config_class = CNNGANConfig
+            create_model = create_cnn_gan_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 
@@ -122,11 +126,15 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
 
         unique_ids = features["unique_ids"]
         input_ids = features["input_ids"]
+        segment_ids = features["segment_ids"]
         token_embeddings = features["token_embeddings"]
 
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
-        (start_logits, end_logits) = create_model(is_training, token_embeddings, config)
+        (start_logits, end_logits) = create_model(is_training,
+                                                  token_embeddings,
+                                                  config,
+                                                  segment_ids=segment_ids)
 
         tvars = tf.trainable_variables()
 

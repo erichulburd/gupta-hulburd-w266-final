@@ -19,7 +19,7 @@ class LSTMConfig:
         }
 
 
-def create_rnn_lstm_model(is_training, token_embeddings, config):
+def create_rnn_lstm_model(is_training, token_embeddings, config, segment_ids=None):
     # for example https://jasdeep06.github.io/posts/Understanding-LSTM-in-Tensorflow-MNIST/
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
     batch_size = input_shape[0]

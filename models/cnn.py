@@ -60,7 +60,7 @@ def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name
     return out_layer
 
 
-def create_cnn_model(is_training, token_embeddings, config: CNNConfig):
+def create_cnn_model(is_training, token_embeddings, config: CNNConfig, segment_ids=None):
     """Creates a classification model."""
 
     input_shape = get_shape_list(token_embeddings, expected_rank=3)

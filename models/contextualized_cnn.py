@@ -1,26 +1,34 @@
 import tensorflow as tf
-
+import math
 from bert.modeling import BertConfig, get_shape_list
+from utils import mask_questions_batch
 
 
 class CNNGANConfig:
     depth: int
+    generative_depth: int
     channels_out: int
     max_seq_length: int
+    model: str
     bert_cong: BertConfig
 
-    def __init__(self, depth: int, channels_out: int, max_seq_length: int, bert_config: BertConfig):
+    def __init__(self, depth: int, generative_depth: int, channels_out: int, max_seq_length: int,
+                 bert_config: BertConfig, model: str):
         self.depth = depth
         self.channels_out = channels_out
         self.max_seq_length = max_seq_length
         self.bert_config = bert_config
+        self.generative_depth = generative_depth
+        self.model = model
 
     def serialize(self):
         return {
             'depth': self.depth,
+            'generative_depth': self.generative_depth,
             'channels_out': self.channels_out,
             'max_seq_length': self.max_seq_length,
             'bert_config': self.bert_config.to_dict(),
+            'model': self.model
         }
 
 
@@ -80,8 +88,7 @@ class PerSampleCNN:
         return tf.reduce_sum(out, axis=2)
 
 
-def create_deconv_model(bert_config, is_training, token_embeddings, paragraphs,
-                        config: CNNGANConfig):
+def create_cnn_gan_model(is_training, token_embeddings, config: CNNGANConfig, segment_ids=None):
     """
     Impossible to train. I was getting examples/sec: 0.152973
     May need to take a closer look here and figure out if something is wrong
@@ -94,32 +101,50 @@ def create_deconv_model(bert_config, is_training, token_embeddings, paragraphs,
     seq_length = input_shape[1]
     assert config.depth <= seq_length
     hidden_size = input_shape[2]
+    assert config.generative_depth * config.depth >= seq_length
 
     channels_in = 1
     channels_out = config.channels_out
 
+    paragraphs = mask_questions_batch(token_embeddings, segment_ids, hidden_size)
     token_embeddings = tf.reshape(token_embeddings,
                                   [batch_size, seq_length, hidden_size, channels_in])
-    deconv_filter = tf.get_variable('cls/deconv/filter',
-                                    [3, hidden_size, channels_out, channels_in],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.02))
-    output_shape = tf.constant([batch_size, config.depth, hidden_size, channels_out],
-                               dtype=tf.int32)
-    # See https://github.com/vdumoulin/conv_arithmetic for a good explanation
-    deconv = tf.nn.conv2d_transpose(
-        token_embeddings,
-        filter=deconv_filter,
-        output_shape=output_shape,
-        strides=[1, 1, 1, 1],
-        # dilations=[1, 1, 1, 1],
-        data_format='NHWC',
-        padding='SAME',
-        name='deconv')
 
-    deconv = tf.reshape(deconv, [batch_size, config.depth, hidden_size, channels_in, channels_out])
+    # initialise weights and bias for the filter
+    conv_filt_shape = [config.generative_depth, hidden_size, channels_in, channels_out]
+    weights = tf.Variable(tf.truncated_normal(conv_filt_shape, stddev=0.03), name='deconv_W')
+    bias = tf.Variable(tf.truncated_normal([channels_out]), name='deconv_b')
+
+    # setup the convolutional layer operation
+    stride_height = math.ceil((seq_length - config.generative_depth) / (float(config.depth) - 1.))
+    padding = stride_height * (config.depth - 1) - (seq_length - config.generative_depth)
+    padding_top = int(padding / 2)
+    padding_bottom = padding - padding_top
+    filters = tf.nn.conv2d(token_embeddings,
+                           weights, [1, stride_height, 1, 1],
+                           data_format='NHWC',
+                           padding=[
+                               [0, 0],
+                               [padding_top, padding_bottom],
+                               [math.floor(hidden_size / 2.),
+                                math.floor(hidden_size / 2.) - 1],
+                               [0, 0],
+                           ])
+
+    print({
+        'stride_height': stride_height,
+        'padding_top': padding_top,
+        'padding_bottom': padding_bottom,
+        'n_strides': config.depth - 1,
+        'strided_length': config.generative_depth + stride_height * (config.depth - 1)
+    })
+    # add the bias
+    filters += bias
+    filters = tf.reshape(filters,
+                         [batch_size, config.depth, hidden_size, channels_in, channels_out])
 
     paragraphs = tf.reshape(paragraphs, [batch_size, seq_length, hidden_size, channels_in])
-    conv = PerSampleCNN(inpt=paragraphs, filters=deconv).apply()
+    conv = PerSampleCNN(inpt=paragraphs, filters=filters).apply()
 
     n_positions = 2  # start and end logits
     wd1 = tf.Variable(tf.truncated_normal([channels_out, n_positions], stddev=0.03), name='wd1')
