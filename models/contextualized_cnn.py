@@ -9,7 +9,7 @@ class CNNGANConfig:
     max_seq_length: int
     bert_cong: BertConfig
 
-    def __init__(self, depth: int, channels_out: int, max_seq_length: int, bert_config: BertConfig):
+    def __init__(self, depth: int, channels_out: int, max_seq_length: int, bert_config: BertConfig,model):
         self.depth = depth
         self.channels_out = channels_out
         self.max_seq_length = max_seq_length

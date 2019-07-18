@@ -7,12 +7,13 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
                    compute_weighted_batch_accuracy)
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
+from models.contextualized_cnn import CNNGANConfig, create_deconv_model
 
 flags = tf.flags
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("num_train_examples", 100, "The number of training examples to train")
+flags.DEFINE_integer("num_train_examples", 1000, "The number of training examples to train")
 
 flags.DEFINE_integer("max_seq_length", MAX_SEQ_LENGTH, "The maximum total input sequence"
                      "length after WordPiece tokenization.")
@@ -102,6 +103,9 @@ def load_and_save_config(filename: str):
         elif parsed['model'] == 'cnn':
             config_class = CNNConfig
             create_model = create_cnn_model
+        elif parsed['model'] == 'cnngan':
+            config_class = CNNGANConfig
+            create_model = create_deconv_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 

@@ -2,7 +2,7 @@
     "model": "cnn",
     "filter_shapes": [
         [
-            3,
+            384,
             768
         ]
     ],
@@ -13,6 +13,6 @@
         ]
     ],
     "channels_out": [
-        4
+        2
     ]
 }
