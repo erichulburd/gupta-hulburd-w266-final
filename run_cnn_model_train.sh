@@ -8,5 +8,5 @@ GCP_PROJECT="w266-240206"
     --do_train=True \
     --config=cnn_config.json \
     --tf_record='train_non_fine_tuned' \
-    --num_train_examples=100000 \
+    --num_train_examples=100 \
     --num_train_epochs=1 \

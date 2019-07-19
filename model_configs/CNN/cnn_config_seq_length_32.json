@@ -9,7 +9,7 @@
     "pool_shapes": [
         [
             4,
-            16
+            8
         ]
     ],
     "channels_out": [
