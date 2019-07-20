@@ -1,4 +1,5 @@
 import tensorflow as tf
+import os
 
 # NOTE: We are using the default value from the run_squad.py script.
 MAX_SEQ_LENGTH = 384
@@ -13,11 +14,9 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder, bert_c
         "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
         "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
         "token_embeddings": tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+        "start_positions": tf.FixedLenFeature([], tf.int64),
+        "end_positions": tf.FixedLenFeature([], tf.int64)
     }
-
-    if is_training:
-        name_to_features["start_positions"] = tf.FixedLenFeature([], tf.int64)
-        name_to_features["end_positions"] = tf.FixedLenFeature([], tf.int64)
 
     def _decode_record(record, name_to_features):
         """Decodes a record to a TensorFlow example."""
@@ -93,3 +92,12 @@ def compute_weighted_batch_accuracy(logits, positions, k):
                                            positions.get_shape()[0])
 
     return tf.reduce_sum(tf.map_fn(_calc_accuracies, tf.constant(list(range(k)), tf.float64)))
+
+
+def make_filename(set_name, split, output_dir, n_examples=None):
+    filename = ''
+    if n_examples is not None:
+        filename = "%s%d-{:4.2f}.tf_record" % (set_name, n_examples)
+    else:
+        filename = "%s-{:4.2f}.tf_record" % set_name
+    return os.path.join(output_dir, filename.format(split))
