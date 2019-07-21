@@ -260,7 +260,6 @@ def read_squad_examples(input_file, is_training, max_examples=None):
 def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride, max_query_length,
                                  is_training):
     """Loads a data file into a list of `InputBatch`s."""
-
     unique_id = 1000000000
 
     features = []
@@ -418,8 +417,6 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride
             unique_id += 1
 
             features.append(feature)
-        if len(features) >= 500:
-            break
 
     return features
 
@@ -571,8 +568,6 @@ def main(_):
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
     set_names = ['train', 'eval']
-    print('main.splits')
-    print(splits)
     write_features(TRAIN_FILE, True, [
         make_filename(set_name, split, FLAGS.output_dir, FLAGS.n_examples)
         for set_name, split in zip(set_names, splits)
@@ -712,6 +707,8 @@ def write_features(input_file: str,
                                                 max_query_length=FLAGS.max_query_length,
                                                 is_training=is_training)
 
+        print('len(features)')
+        print(len(features))
         unique_id_to_feature = {}
         for feature in features:
             unique_id_to_feature[feature.unique_id] = feature
