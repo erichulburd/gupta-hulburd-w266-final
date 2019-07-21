@@ -260,7 +260,6 @@ def read_squad_examples(input_file, is_training, max_examples=None):
 def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride, max_query_length,
                                  is_training):
     """Loads a data file into a list of `InputBatch`s."""
-
     unique_id = 1000000000
 
     features = []
@@ -418,8 +417,6 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride
             unique_id += 1
 
             features.append(feature)
-        if len(features) >= 500:
-            break
 
     return features
 
@@ -697,17 +694,21 @@ def write_features(input_file: str,
         idx = next_idx
     del examples
 
-    for output_file, examples in zip(output_files, example_sets):
+    for output_file, example_set in zip(output_files, example_sets):
+        print('len(example_set)')
+        print(len(example_set))
         tokenizer = tokenization.FullTokenizer(vocab_file=VOCAB_FILE,
                                                do_lower_case=FLAGS.do_lower_case)
 
-        features = convert_examples_to_features(examples=examples,
+        features = convert_examples_to_features(examples=example_set,
                                                 tokenizer=tokenizer,
                                                 max_seq_length=FLAGS.max_seq_length,
                                                 doc_stride=FLAGS.doc_stride,
                                                 max_query_length=FLAGS.max_query_length,
                                                 is_training=is_training)
 
+        print('len(features)')
+        print(len(features))
         unique_id_to_feature = {}
         for feature in features:
             unique_id_to_feature[feature.unique_id] = feature
@@ -740,7 +741,7 @@ def write_features(input_file: str,
         # STEP 3: Process token embeddings and write as tf_record.
         writer = FeatureWriter(filename=output_file, is_training=is_training)
         tf.logging.info("***** Writing features *****")
-        tf.logging.info("    Num orig examples = %d", len(examples))
+        tf.logging.info("    Num orig examples = %d", len(example_set))
         tf.logging.info("    Num split examples = %d", writer.num_features)
 
         ct = 0
