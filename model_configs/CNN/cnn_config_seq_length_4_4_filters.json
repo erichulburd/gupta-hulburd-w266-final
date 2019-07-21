@@ -2,8 +2,10 @@
     "model": "cnn",
     "filter_shapes": [
         [
-            32,
-            768
+            4,
+            768,
+	    4,
+	    4
         ]
     ],
     "pool_shapes": [
@@ -13,6 +15,6 @@
         ]
     ],
     "channels_out": [
-        4
+        4,2,2
     ]
 }

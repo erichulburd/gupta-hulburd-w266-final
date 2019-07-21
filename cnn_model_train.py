@@ -7,7 +7,7 @@ sys.path.append('./')
 config_dir='model_configs/CNN'
 training_file_path = './out/features/train_non_fine_tuned'
 training_file_name = training_file_path.split('/')[3]
-n_examples = 100
+n_examples = 10000
 num_train_epochs = 1
 
 for config_file_name in os.listdir(config_dir):
