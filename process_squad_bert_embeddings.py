@@ -571,6 +571,8 @@ def main(_):
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
     set_names = ['train', 'eval']
+    print('main.splits')
+    print(splits)
     write_features(TRAIN_FILE, True, [
         make_filename(set_name, split, FLAGS.output_dir, FLAGS.n_examples)
         for set_name, split in zip(set_names, splits)
@@ -689,13 +691,19 @@ def write_features(input_file: str,
     rng = random.Random(12345)
     rng.shuffle(examples)
     idx = 0
+    print('write_features.splits')
+    print(splits)
+    print(len(examples))
     assert sum(splits) == 1.0
     example_sets = []
     for split in splits:
         next_idx = idx + math.ceil(split * len(examples))
+        print(idx, next_idx)
         example_sets.append(examples[idx:next_idx])
         idx = next_idx
     del examples
+    print([len(example_set) for example_set in example_sets])
+    return
 
     for output_file, examples in zip(output_files, example_sets):
         tokenizer = tokenization.FullTokenizer(vocab_file=VOCAB_FILE,
