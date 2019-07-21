@@ -691,25 +691,21 @@ def write_features(input_file: str,
     rng = random.Random(12345)
     rng.shuffle(examples)
     idx = 0
-    print('write_features.splits')
-    print(splits)
-    print(len(examples))
     assert sum(splits) == 1.0
     example_sets = []
     for split in splits:
         next_idx = idx + math.ceil(split * len(examples))
-        print(idx, next_idx)
         example_sets.append(examples[idx:next_idx])
         idx = next_idx
     del examples
-    print([len(example_set) for example_set in example_sets])
-    return
 
-    for output_file, examples in zip(output_files, example_sets):
+    for output_file, example_set in zip(output_files, example_sets):
+        print('len(example_set)')
+        print(len(example_set))
         tokenizer = tokenization.FullTokenizer(vocab_file=VOCAB_FILE,
                                                do_lower_case=FLAGS.do_lower_case)
 
-        features = convert_examples_to_features(examples=examples,
+        features = convert_examples_to_features(examples=example_set,
                                                 tokenizer=tokenizer,
                                                 max_seq_length=FLAGS.max_seq_length,
                                                 doc_stride=FLAGS.doc_stride,
@@ -748,7 +744,7 @@ def write_features(input_file: str,
         # STEP 3: Process token embeddings and write as tf_record.
         writer = FeatureWriter(filename=output_file, is_training=is_training)
         tf.logging.info("***** Writing features *****")
-        tf.logging.info("    Num orig examples = %d", len(examples))
+        tf.logging.info("    Num orig examples = %d", len(example_set))
         tf.logging.info("    Num split examples = %d", writer.num_features)
 
         ct = 0
