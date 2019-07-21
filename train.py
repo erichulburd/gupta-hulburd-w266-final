@@ -8,6 +8,7 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
+from utils import make_filename
 
 flags = tf.flags
 
@@ -29,7 +30,6 @@ flags.DEFINE_bool("do_train", True, "Whether to run training.")
 flags.DEFINE_bool("do_predict", False, "Whether to run eval on the dev set.")
 
 flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
-flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for prediction.")
 
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
@@ -42,6 +42,12 @@ flags.DEFINE_float(
 flags.DEFINE_integer("save_checkpoints_steps", 1000, "How often to save the model checkpoint.")
 
 flags.DEFINE_integer("iterations_per_loop", 1000, "How many steps to make in each estimator call.")
+
+flags.DEFINE_integer("eval_start_delay_secs", 120, "How many steps to make in each estimator call.")
+flags.DEFINE_integer("eval_throttle_secs", 450, "How many steps to make in each estimator call.")
+flags.DEFINE_integer("eval_batch_size", 128, "Total batch size for prediction.")
+# this should be N_eval / eval_batch_size
+flags.DEFINE_integer("eval_steps", 20, "Number eval batches")
 
 flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
 
@@ -65,7 +71,9 @@ tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
 flags.DEFINE_integer("num_tpu_cores", 8,
                      "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
-flags.DEFINE_string("tf_record", "train", "Name of tf_record file to use for input")
+flags.DEFINE_integer("n_examples", None, "Name of tf_record file to use for input")
+flags.DEFINE_float("eval_percent", 0.1,
+                   "Percent of train set for evaluation (for finding filename).")
 flags.DEFINE_string("config", "config.json", "JSON file with model configuration.")
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
@@ -76,7 +84,10 @@ INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
-N_TRAIN_EXAMPLES = 10
+N_TRAIN_EXAMPLES = FLAGS.n_examples
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), 'out/features',
+                                N_TRAIN_EXAMPLES)
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), 'out/features', N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
 
@@ -164,33 +175,39 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
 
         seq_length = get_shape_list(input_ids)[1]
 
+        def compute_loss(logits, positions):
+            one_hot_positions = tf.one_hot(positions, depth=seq_length, dtype=tf.float32)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
+            loss = -tf.reduce_mean(tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
+            return loss
+
+        start_positions = features["start_positions"]
+        end_positions = features["end_positions"]
+
+        start_loss = compute_loss(start_logits, start_positions)
+        end_loss = compute_loss(end_logits, end_positions)
+
+        total_loss = (start_loss + end_loss) / 2.0
+
+        start_accuracy = compute_batch_accuracy(start_logits, start_positions)
+        end_accuracy = compute_batch_accuracy(end_logits, end_positions)
+        start_weighted5_accuracy = compute_weighted_batch_accuracy(start_logits,
+                                                                   start_positions,
+                                                                   k=5)
+        end_weighted5_accuracy = compute_weighted_batch_accuracy(end_logits, end_positions, k=5)
+
+        def write_summaries(family):
+            tf.summary.scalar("start_loss", start_loss, family=family)
+            tf.summary.scalar("end_loss", end_loss, family=family)
+            tf.summary.scalar("total_loss", total_loss, family=family)
+
+            tf.summary.scalar("start_accuracy", start_accuracy, family=family)
+            tf.summary.scalar("end_accuracy", end_accuracy, family=family)
+            tf.summary.scalar("start_weighted5_accuracy", start_weighted5_accuracy, family=family)
+            tf.summary.scalar("end_weighted5_accuracy", end_weighted5_accuracy, family=family)
+
         if mode == tf.estimator.ModeKeys.TRAIN:
-
-            def compute_loss(logits, positions):
-                one_hot_positions = tf.one_hot(positions, depth=seq_length, dtype=tf.float32)
-                log_probs = tf.nn.log_softmax(logits, axis=-1)
-                loss = -tf.reduce_mean(tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
-                return loss
-
-            start_positions = features["start_positions"]
-            end_positions = features["end_positions"]
-
-            start_loss = compute_loss(start_logits, start_positions)
-            end_loss = compute_loss(end_logits, end_positions)
-
-            total_loss = (start_loss + end_loss) / 2.0
-
-            tf.summary.scalar("start_loss", start_loss)
-            tf.summary.scalar("end_loss", end_loss)
-            tf.summary.scalar("total_loss", total_loss)
-
-            tf.summary.scalar("start_accuracy",
-                              compute_batch_accuracy(start_logits, start_positions))
-            tf.summary.scalar("end_accuracy", compute_batch_accuracy(end_logits, end_positions))
-            tf.summary.scalar("start_weighted5_accuracy",
-                              compute_weighted_batch_accuracy(start_logits, start_positions, k=5))
-            tf.summary.scalar("end_weighted5_accuracy",
-                              compute_weighted_batch_accuracy(end_logits, end_positions, k=5))
+            write_summaries('train')
 
             # NOTE: We are using BERT's AdamWeightDecayOptimizer. We may want to reconsider
             # this if we are not able to effectively train.
@@ -208,15 +225,19 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
                                                           training_hooks=[summaries],
                                                           scaffold_fn=scaffold_fn)
         elif mode == tf.estimator.ModeKeys.EVAL:
+            write_summaries('eval')
+            summaries = tf.train.SummarySaverHook(
+                save_steps=1,
+                output_dir=OUTPUT_DIR,
+                summary_op=tf.compat.v1.summary.merge_all(),
+            )
+            predictions = {}
+
             # inference_model = initialize_inference_model(hypes)
-            eval_metric_ops = {
-                "start_loss": start_loss,
-                "end_loss": end_loss,
-                'total_loss': total_loss
-            }
             output_spec = tf.estimator.EstimatorSpec(mode,
                                                      loss=total_loss,
-                                                     eval_metric_ops=eval_metric_ops)
+                                                     evaluation_hooks=[summaries],
+                                                     predictions=predictions)
 
         elif mode == tf.estimator.ModeKeys.PREDICT:
             predictions = {
@@ -253,6 +274,7 @@ def main(_):
                                           save_summary_steps=2,
                                           model_dir=FLAGS.output_dir,
                                           save_checkpoints_steps=FLAGS.save_checkpoints_steps,
+                                          keep_checkpoint_max=2,
                                           tpu_config=tpu_config)
 
     num_train_steps = None
@@ -275,18 +297,36 @@ def main(_):
                                             model_fn=model_fn,
                                             config=run_config,
                                             train_batch_size=FLAGS.train_batch_size,
-                                            predict_batch_size=FLAGS.predict_batch_size)
+                                            eval_batch_size=FLAGS.eval_batch_size)
 
     if FLAGS.do_train:
         # We write to a temporary file to avoid storing very large constant tensors
         # in memory.
 
-        train_input_fn = input_fn_builder(input_file="out/features/%s.tf_record" % FLAGS.tf_record,
+        train_input_fn = input_fn_builder(input_file=TRAIN_FILE_NAME,
                                           seq_length=FLAGS.max_seq_length,
                                           is_training=True,
                                           bert_config=bert_config,
                                           drop_remainder=True)
-        estimator.train(input_fn=train_input_fn, max_steps=num_train_steps)
+        eval_input_fn = input_fn_builder(
+            input_file=EVAL_FILE_NAME,
+            seq_length=FLAGS.max_seq_length,
+            # No need to shuffle eval set
+            is_training=False,
+            bert_config=bert_config,
+            drop_remainder=True)
+        # This should be .train_and_evaluate
+        # https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate
+        # and https://towardsdatascience.com/how-to-configure-the-train-and-evaluate-loop-of-the-tensorflow-estimator-api-45c470f6f8d
+        train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=num_train_steps)
+        eval_spec = tf.estimator.EvalSpec(
+            input_fn=eval_input_fn,
+            # start_delay_secs=FLAGS.eval_start_delay_secs,  # start evaluating after N seconds
+            throttle_secs=FLAGS.eval_throttle_secs,
+            steps=FLAGS.eval_steps,
+        )
+
+        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
 
 if __name__ == "__main__":
