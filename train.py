@@ -1,6 +1,8 @@
 import tensorflow as tf
 from datetime import datetime
 import json
+import math
+from bert import modeling
 from bert.modeling import get_assignment_map_from_checkpoint, get_shape_list, BertConfig
 from bert.optimization import create_optimizer
 from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
@@ -67,6 +69,8 @@ tf.flags.DEFINE_string(
     "metadata.")
 
 tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
+tf.flags.DEFINE_bool("fine_tune", False,
+                     "Whether to fine tune bert embeddings or take input as features.")
 
 flags.DEFINE_integer("num_tpu_cores", 8,
                      "Only used if `use_tpu` is True. Total number of TPU cores to use.")
@@ -86,12 +90,15 @@ if FLAGS.init_checkpoint is not None:
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
 TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), 'out/features',
-                                N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), 'out/features', N_TRAIN_EXAMPLES)
+                                FLAGS.fine_tune, N_TRAIN_EXAMPLES)
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), 'out/features', FLAGS.fine_tune,
+                               N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
 
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
+
+N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
 def load_and_save_config(filename: str):
@@ -124,8 +131,14 @@ def load_and_save_config(filename: str):
 (config, create_model) = load_and_save_config(FLAGS.config)
 
 
-def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_steps, num_warmup_steps,
-                     use_tpu, config):
+def model_fn_builder(bert_config,
+                     init_checkpoint,
+                     learning_rate,
+                     num_train_steps,
+                     num_warmup_steps,
+                     use_tpu,
+                     config,
+                     fine_tune=False):
     """Returns `model_fn` closure for TPUEstimator."""
 
     def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
@@ -138,9 +151,22 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate, num_train_step
         unique_ids = features["unique_ids"]
         input_ids = features["input_ids"]
         segment_ids = features["segment_ids"]
-        token_embeddings = features["token_embeddings"]
 
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
+
+        token_embeddings = None
+        if fine_tune:
+            input_mask = features["input_mask"]
+            model = modeling.BertModel(config=bert_config,
+                                       is_training=is_training,
+                                       input_ids=input_ids,
+                                       input_mask=input_mask,
+                                       token_type_ids=segment_ids,
+                                       use_one_hot_embeddings=False)
+
+            token_embeddings = model.get_sequence_output()
+        else:
+            token_embeddings = features["token_embeddings"]
 
         (start_logits, end_logits) = create_model(is_training,
                                                   token_embeddings,
@@ -280,7 +306,10 @@ def main(_):
     num_train_steps = None
     num_warmup_steps = None
     if FLAGS.do_train:
-        num_train_steps = int(N_TRAIN_EXAMPLES / FLAGS.train_batch_size * FLAGS.num_train_epochs)
+        num_train_examples = N_TRAIN_EXAMPLES
+        if num_train_examples is None:
+            num_train_examples = math.ceil(N_TOTAL_SQUAD_EXAMPLES * (1. - FLAGS.eval_percent))
+        num_train_steps = int(num_train_examples / FLAGS.train_batch_size * FLAGS.num_train_epochs)
         num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
 
     model_fn = model_fn_builder(bert_config=bert_config,
@@ -289,7 +318,8 @@ def main(_):
                                 num_train_steps=num_train_steps,
                                 num_warmup_steps=num_warmup_steps,
                                 config=config,
-                                use_tpu=FLAGS.use_tpu)
+                                use_tpu=FLAGS.use_tpu,
+                                fine_tune=FLAGS.fine_tune)
 
     # If TPU is not available, this will fall back to normal Estimator on CPU
     # or GPU.
@@ -307,14 +337,16 @@ def main(_):
                                           seq_length=FLAGS.max_seq_length,
                                           is_training=True,
                                           bert_config=bert_config,
-                                          drop_remainder=True)
+                                          drop_remainder=True,
+                                          fine_tune=FLAGS.fine_tune)
         eval_input_fn = input_fn_builder(
             input_file=EVAL_FILE_NAME,
             seq_length=FLAGS.max_seq_length,
             # No need to shuffle eval set
             is_training=False,
             bert_config=bert_config,
-            drop_remainder=True)
+            drop_remainder=True,
+            fine_tune=FLAGS.fine_tune)
         # This should be .train_and_evaluate
         # https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate
         # and https://towardsdatascience.com/how-to-configure-the-train-and-evaluate-loop-of-the-tensorflow-estimator-api-45c470f6f8d

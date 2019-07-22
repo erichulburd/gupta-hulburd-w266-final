@@ -5,7 +5,12 @@ import os
 MAX_SEQ_LENGTH = 384
 
 
-def input_fn_builder(input_file, seq_length, is_training, drop_remainder, bert_config):
+def input_fn_builder(input_file,
+                     seq_length,
+                     is_training,
+                     drop_remainder,
+                     bert_config,
+                     fine_tune=False):
     """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
     name_to_features = {
@@ -13,10 +18,14 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder, bert_c
         "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
         "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
         "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
-        "token_embeddings": tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
         "start_positions": tf.FixedLenFeature([], tf.int64),
         "end_positions": tf.FixedLenFeature([], tf.int64)
     }
+
+    if not fine_tune:
+        name_to_features['token_embeddings'] = tf.FixedLenSequenceFeature([],
+                                                                          tf.float32,
+                                                                          allow_missing=True)
 
     def _decode_record(record, name_to_features):
         """Decodes a record to a TensorFlow example."""
@@ -32,10 +41,9 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder, bert_c
                 t = tf.cast(t, tf.float32)
             example[name] = t
 
-        example['token_embeddings'] = tf.reshape(example['token_embeddings'],
-                                                 [seq_length, bert_config.hidden_size])
-        example['paragraphs'] = mask_questions(example['token_embeddings'], example['segment_ids'],
-                                               bert_config.hidden_size)
+        if not fine_tune:
+            example['token_embeddings'] = tf.reshape(example['token_embeddings'],
+                                                     [seq_length, bert_config.hidden_size])
         return example
 
     def input_fn(params):
@@ -94,10 +102,16 @@ def compute_weighted_batch_accuracy(logits, positions, k):
     return tf.reduce_sum(tf.map_fn(_calc_accuracies, tf.constant(list(range(k)), tf.float64)))
 
 
-def make_filename(set_name, split, output_dir, n_examples=None):
+def make_filename(set_name, split, output_dir, fine_tune, n_examples=None):
+    tf_record_type = ''
+    if fine_tune:
+        tf_record_type = 'bert_input'
+    else:
+        tf_record_type = 'bert_output'
+
     filename = ''
     if n_examples is not None:
-        filename = "%s%d-{:4.2f}.tf_record" % (set_name, n_examples)
+        filename = "%s_%s_%d-{:4.2f}.tf_record" % (set_name, tf_record_type, n_examples)
     else:
-        filename = "%s-{:4.2f}.tf_record" % set_name
+        filename = "%s_%s-{:4.2f}.tf_record" % (set_name, tf_record_type)
     return os.path.join(output_dir, filename.format(split))

@@ -1,5 +1,0 @@
-#! /bin/bash
-
-source env/bin/activate
-
-python process_squad_bert_embeddings.py $@
