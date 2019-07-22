@@ -262,7 +262,7 @@ def read_squad_examples(input_file, is_training, max_examples=None):
 
 
 def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride, max_query_length,
-                                 is_training, output_fn):
+                                 is_training):
     """Loads a data file into a list of `InputBatch`s."""
     unique_id = 1000000000
 
