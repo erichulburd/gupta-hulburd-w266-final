@@ -727,7 +727,7 @@ def write_squad_features(input_file: str,
             writer.process_feature(feature)
 
             if i % 1000 == 0:
-                print('%d examples processed', i)
+                print('%d examples processed' % i)
 
         writer.close()
 
