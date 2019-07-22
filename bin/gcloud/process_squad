@@ -2,7 +2,7 @@
 
 source env/bin/activate
 
-python process_squad_bert_embeddings.py \
+python process_squad.py \
     --data_bert_directory gs://w266-final-project/data/uncased_L-12_H-768_A-12 \
     --data_squad_directory gs://w266-final-project/data/squad \
     --output_dir gs://w266-final-project/out/features/ \

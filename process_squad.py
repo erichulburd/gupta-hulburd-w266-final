@@ -43,6 +43,10 @@ flags.DEFINE_bool(
     "do_lower_case", True, "Whether to lower case the input text. Should be True for uncased "
     "models and False for cased models.")
 
+flags.DEFINE_bool(
+    "fine_tune", False, "Whether to write SQUAD BERT embeddings to tf_record. "
+    "Otherwise, it will write raw SQUAD features.")
+
 flags.DEFINE_integer(
     "max_seq_length", 384, "The maximum total input sequence length after WordPiece tokenization. "
     "Sequences longer than this will be truncated, and sequences shorter "
@@ -258,11 +262,10 @@ def read_squad_examples(input_file, is_training, max_examples=None):
 
 
 def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride, max_query_length,
-                                 is_training):
+                                 is_training, output_fn):
     """Loads a data file into a list of `InputBatch`s."""
     unique_id = 1000000000
 
-    features = []
     for (example_index, example) in enumerate(examples):
         query_tokens = tokenizer.tokenize(example.question_text)
 
@@ -416,9 +419,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride
 
             unique_id += 1
 
-            features.append(feature)
-
-    return features
+            yield feature
 
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
@@ -506,7 +507,7 @@ class FeatureWriter(object):
         self.num_features = 0
         self._writer = tf.python_io.TFRecordWriter(filename)
 
-    def process_feature(self, feature, token_embeddings):
+    def process_feature(self, feature, token_embeddings=None):
         """Write a InputFeature to the TFRecordWriter as a tf.train.Example."""
         self.num_features += 1
 
@@ -519,9 +520,10 @@ class FeatureWriter(object):
         features["input_ids"] = create_int_feature(feature.input_ids)
         features["input_mask"] = create_int_feature(feature.input_mask)
         features["segment_ids"] = create_int_feature(feature.segment_ids)
-        features["token_embeddings"] = _flat_map_create_float_feature(token_embeddings)
         features["start_positions"] = create_int_feature([feature.start_position])
         features["end_positions"] = create_int_feature([feature.end_position])
+        if token_embeddings is not None:
+            features["token_embeddings"] = _flat_map_create_float_feature(token_embeddings)
 
         if self.is_training:
             impossible = 0
@@ -563,13 +565,20 @@ def main(_):
 
     tf.gfile.MakeDirs(FLAGS.output_dir)
 
+    writer_fn = None
+    if FLAGS.fine_tune:
+        writer_fn = write_squad_features
+    else:
+        writer_fn = write_bert_embeddings
+
     if FLAGS.write_test:
-        write_features(TEST_FILE, False, [os.path.join(FLAGS.output_dir, "test.tf_record")], [1.0])
+        writer_fn(TEST_FILE, False, [os.path.join(FLAGS.output_dir, "test.tf_record")], [1.0])
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
     set_names = ['train', 'eval']
-    write_features(TRAIN_FILE, True, [
-        make_filename(set_name, split, FLAGS.output_dir, FLAGS.n_examples)
+
+    writer_fn(TRAIN_FILE, True, [
+        make_filename(set_name, split, FLAGS.output_dir, FLAGS.fine_tune, FLAGS.n_examples)
         for set_name, split in zip(set_names, splits)
     ], splits, FLAGS.n_examples)
 
@@ -583,13 +592,13 @@ def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu, use_o
         unique_ids = features["unique_ids"]
         input_ids = features["input_ids"]
         input_mask = features["input_mask"]
-        input_type_ids = features["input_type_ids"]
+        segment_ids = features["segment_ids"]
 
         model = modeling.BertModel(config=bert_config,
                                    is_training=False,
                                    input_ids=input_ids,
                                    input_mask=input_mask,
-                                   token_type_ids=input_type_ids,
+                                   token_type_ids=segment_ids,
                                    use_one_hot_embeddings=use_one_hot_embeddings)
 
         if mode != tf.estimator.ModeKeys.PREDICT:
@@ -629,19 +638,19 @@ def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu, use_o
     return model_fn
 
 
-def input_fn_builder(features, seq_length):
+def bert_input_fn_builder(features, seq_length):
     """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
     all_unique_ids = []
     all_input_ids = []
     all_input_mask = []
-    all_input_type_ids = []
+    all_segment_ids = []
 
     for feature in features:
         all_unique_ids.append(feature.unique_id)
         all_input_ids.append(feature.input_ids)
         all_input_mask.append(feature.input_mask)
-        all_input_type_ids.append(feature.segment_ids)
+        all_segment_ids.append(feature.segment_ids)
 
     def input_fn(params):
         """The actual input function."""
@@ -659,8 +668,8 @@ def input_fn_builder(features, seq_length):
             tf.constant(all_input_ids, shape=[num_examples, seq_length], dtype=tf.int32),
             "input_mask":
             tf.constant(all_input_mask, shape=[num_examples, seq_length], dtype=tf.int32),
-            "input_type_ids":
-            tf.constant(all_input_type_ids, shape=[num_examples, seq_length], dtype=tf.int32),
+            "segment_ids":
+            tf.constant(all_segment_ids, shape=[num_examples, seq_length], dtype=tf.int32),
         })
 
         d = d.batch(batch_size=batch_size, drop_remainder=False)
@@ -669,18 +678,16 @@ def input_fn_builder(features, seq_length):
     return input_fn
 
 
-def write_features(input_file: str,
-                   is_training: bool,
-                   output_files: [str],
-                   splits: [int],
-                   max_examples: int = None):
-    bert_config = modeling.BertConfig.from_json_file(BERT_CONFIG_FILE)
+def _parse_squad_features(input_file: str,
+                          is_training: bool,
+                          output_files: [str],
+                          splits: [int],
+                          max_examples: int = None):
 
     # STEP 1: Tokenize inputs
     examples = read_squad_examples(input_file=input_file,
                                    is_training=is_training,
                                    max_examples=max_examples)
-
     # Pre-shuffle the input to avoid having to make a very large shuffle
     # buffer in in the `input_fn`.
     rng = random.Random(12345)
@@ -695,20 +702,45 @@ def write_features(input_file: str,
     del examples
 
     for output_file, example_set in zip(output_files, example_sets):
-        print('len(example_set)')
-        print(len(example_set))
         tokenizer = tokenization.FullTokenizer(vocab_file=VOCAB_FILE,
                                                do_lower_case=FLAGS.do_lower_case)
 
-        features = convert_examples_to_features(examples=example_set,
-                                                tokenizer=tokenizer,
-                                                max_seq_length=FLAGS.max_seq_length,
-                                                doc_stride=FLAGS.doc_stride,
-                                                max_query_length=FLAGS.max_query_length,
-                                                is_training=is_training)
+        yield (output_file,
+               convert_examples_to_features(examples=example_set,
+                                            tokenizer=tokenizer,
+                                            max_seq_length=FLAGS.max_seq_length,
+                                            doc_stride=FLAGS.doc_stride,
+                                            max_query_length=FLAGS.max_query_length,
+                                            is_training=is_training))
 
-        print('len(features)')
-        print(len(features))
+
+def write_squad_features(input_file: str,
+                         is_training: bool,
+                         output_files: [str],
+                         splits: [int],
+                         max_examples: int = None):
+    for output_file, features in _parse_squad_features(input_file, is_training, output_files,
+                                                       splits, max_examples):
+
+        writer = FeatureWriter(filename=output_file, is_training=is_training)
+        for i, feature in enumerate(features):
+            writer.process_feature(feature)
+
+            if i % 1000 == 0:
+                print('%d examples processed', i)
+
+        writer.close()
+
+
+def write_bert_embeddings(input_file: str,
+                          is_training: bool,
+                          output_files: [str],
+                          splits: [int],
+                          max_examples: int = None):
+    bert_config = modeling.BertConfig.from_json_file(BERT_CONFIG_FILE)
+
+    for output_file, features in _parse_squad_features(input_file, is_training, output_files,
+                                                       splits, max_examples):
         unique_id_to_feature = {}
         for feature in features:
             unique_id_to_feature[feature.unique_id] = feature
@@ -736,12 +768,11 @@ def write_features(input_file: str,
                                                 predict_batch_size=FLAGS.batch_size,
                                                 train_batch_size=FLAGS.batch_size)
 
-        input_fn = input_fn_builder(features=features, seq_length=FLAGS.max_seq_length)
+        input_fn = bert_input_fn_builder(features=features, seq_length=FLAGS.max_seq_length)
 
         # STEP 3: Process token embeddings and write as tf_record.
         writer = FeatureWriter(filename=output_file, is_training=is_training)
         tf.logging.info("***** Writing features *****")
-        tf.logging.info("    Num orig examples = %d", len(example_set))
         tf.logging.info("    Num split examples = %d", writer.num_features)
 
         ct = 0
