@@ -262,7 +262,7 @@ def read_squad_examples(input_file, is_training, max_examples=None):
 
 
 def convert_examples_to_features(examples, tokenizer, max_seq_length, doc_stride, max_query_length,
-                                 is_training, output_fn):
+                                 is_training):
     """Loads a data file into a list of `InputBatch`s."""
     unique_id = 1000000000
 
@@ -727,7 +727,7 @@ def write_squad_features(input_file: str,
             writer.process_feature(feature)
 
             if i % 1000 == 0:
-                print('%d examples processed', i)
+                print('%d examples processed' % i)
 
         writer.close()
 
