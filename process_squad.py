@@ -742,8 +742,10 @@ def write_bert_embeddings(input_file: str,
     for output_file, features in _parse_squad_features(input_file, is_training, output_files,
                                                        splits, max_examples):
         unique_id_to_feature = {}
+        feature_list = []
         for feature in features:
             unique_id_to_feature[feature.unique_id] = feature
+            feature_list.append(feature)
 
         # STEP 2: initialize BERT model to extract token embeddings.
         layer_indexes = [-1]
@@ -768,7 +770,7 @@ def write_bert_embeddings(input_file: str,
                                                 predict_batch_size=FLAGS.batch_size,
                                                 train_batch_size=FLAGS.batch_size)
 
-        input_fn = bert_input_fn_builder(features=features, seq_length=FLAGS.max_seq_length)
+        input_fn = bert_input_fn_builder(features=feature_list, seq_length=FLAGS.max_seq_length)
 
         # STEP 3: Process token embeddings and write as tf_record.
         writer = FeatureWriter(filename=output_file, is_training=is_training)
