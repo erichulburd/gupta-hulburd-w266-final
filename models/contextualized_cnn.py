@@ -5,15 +5,8 @@ from utils import mask_questions_batch
 
 
 class CNNGANConfig:
-    depth: int
-    generative_depth: int
-    channels_out: int
-    max_seq_length: int
-    model: str
-    bert_cong: BertConfig
-
-    def __init__(self, depth: int, generative_depth: int, channels_out: int, max_seq_length: int,
-                 bert_config: BertConfig, model: str):
+    def __init__(self, depth, generative_depth, channels_out, max_seq_length,
+                 bert_config, model):
         self.depth = depth
         self.channels_out = channels_out
         self.max_seq_length = max_seq_length

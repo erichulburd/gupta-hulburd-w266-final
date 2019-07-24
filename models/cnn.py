@@ -3,11 +3,6 @@ from bert.modeling import BertConfig, get_shape_list
 
 
 class CNNConfig:
-    filter_shapes: [[int]]
-    pool_shapes: [[int]]
-    channels_out: [int]
-    max_seq_length: int
-    bert_config: BertConfig
 
     def __init__(self, filter_shapes, pool_shapes, channels_out, max_seq_length, bert_config,
                  model):

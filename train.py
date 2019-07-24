@@ -101,7 +101,7 @@ bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
 N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
-def load_and_save_config(filename: str):
+def load_and_save_config(filename):
     with open(filename) as json_data:
         parsed = json.load(json_data)
         parsed['max_seq_length'] = FLAGS.max_seq_length
@@ -243,7 +243,7 @@ def model_fn_builder(bert_config,
             summaries = tf.train.SummarySaverHook(
                 save_steps=1,
                 output_dir=OUTPUT_DIR,
-                summary_op=tf.compat.v1.summary.merge_all(),
+                summary_op=tf.summary.merge_all(),
             )
             output_spec = tf.contrib.tpu.TPUEstimatorSpec(mode=mode,
                                                           loss=total_loss,
@@ -255,7 +255,7 @@ def model_fn_builder(bert_config,
             summaries = tf.train.SummarySaverHook(
                 save_steps=1,
                 output_dir=OUTPUT_DIR,
-                summary_op=tf.compat.v1.summary.merge_all(),
+                summary_op=tf.summary.merge_all(),
             )
             predictions = {}
 
