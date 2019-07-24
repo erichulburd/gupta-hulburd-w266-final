@@ -1,0 +1,18 @@
+{
+    "model": "cnn",
+    "filter_shapes": [
+        [
+            3,
+            768
+        ]
+    ],
+    "pool_shapes": [
+        [
+            4,
+            8
+        ]
+    ],
+    "channels_out": [
+        4
+    ]
+}

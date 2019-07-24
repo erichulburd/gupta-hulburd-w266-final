@@ -1,10 +1,10 @@
-#!/bin/sh
+#!/bin/sh -f
 
-BERT_LARGE_DIR='/home/suhasgupta/w266/gupta-hulburd-w266-final/BERT_LARGE_DIR'
-SQUAD_DIR='/home/suhasgupta/w266/gupta-hulburd-w266-final/'
-OUTPUT_DIR='/home/suhasgupta/w266/gupta-hulburd-w266-final/out'
+BERT_LARGE_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/BERT_BASE_DIR' 
+SQUAD_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/SQUAD_DATA' 
+OUTPUT_DIR='/Users/suhasgupta/w266/gupta-hulburd-w266-final/out' 
 
-echo $BERT_LARGE_DIR
+echo $BERT_LARGE_DIR 
 echo $SQUAD_DIR
 echo $OUTPUT_DIR
 
