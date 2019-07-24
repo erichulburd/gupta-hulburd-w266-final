@@ -1,9 +1,0 @@
-{
-    "model": "cnngan",
-    "depth": [
-            4
-    ],
-    "channels_out": [
-        4
-    ]
-}

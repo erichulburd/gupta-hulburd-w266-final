@@ -11,6 +11,7 @@ from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
 from utils import make_filename
+import time
 
 flags = tf.flags
 
@@ -315,6 +316,8 @@ def main(_):
             num_train_examples = math.ceil(N_TOTAL_SQUAD_EXAMPLES * (1. - FLAGS.eval_percent))
         num_train_steps = int(num_train_examples / FLAGS.train_batch_size * FLAGS.num_train_epochs)
         num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
+    print("Total training steps = %d" % num_train_steps)
+    time.sleep(2)
 
     model_fn = model_fn_builder(bert_config=bert_config,
                                 init_checkpoint=INIT_CHECKPOINT,
