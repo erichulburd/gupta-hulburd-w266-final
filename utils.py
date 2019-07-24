@@ -4,7 +4,6 @@ import os
 # NOTE: We are using the default value from the run_squad.py script.
 MAX_SEQ_LENGTH = 384
 
-
 def input_fn_builder(input_file,
                      seq_length,
                      is_training,
@@ -26,7 +25,6 @@ def input_fn_builder(input_file,
         name_to_features['token_embeddings'] = tf.FixedLenSequenceFeature([],
                                                                           tf.float32,
                                                                           allow_missing=True)
-
     def _decode_record(record, name_to_features):
         """Decodes a record to a TensorFlow example."""
         example = tf.parse_single_example(record, name_to_features)
@@ -101,7 +99,6 @@ def compute_weighted_batch_accuracy(logits, positions, k):
 
     return tf.reduce_sum(tf.map_fn(_calc_accuracies, tf.constant(list(range(k)), tf.float64)))
 
-
 def make_filename(set_name, split, output_dir, fine_tune, n_examples=None):
     tf_record_type = ''
     if fine_tune:
@@ -115,3 +112,4 @@ def make_filename(set_name, split, output_dir, fine_tune, n_examples=None):
     else:
         filename = "%s_%s-{:4.2f}.tf_record" % (set_name, tf_record_type)
     return os.path.join(output_dir, filename.format(split))
+

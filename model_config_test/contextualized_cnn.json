@@ -1,0 +1,6 @@
+{
+    "model": "cnn_gan",
+    "depth": 5,
+    "generative_depth": 100,
+    "channels_out": 1
+}
