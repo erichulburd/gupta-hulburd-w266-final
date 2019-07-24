@@ -24,7 +24,7 @@ flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
 
 flags.DEFINE_string("init_checkpoint", None, '')
 
-flags.DEFINE_string("output_dir", "out/%s" % datetime.now().isoformat(),
+flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
 
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
@@ -83,15 +83,15 @@ flags.DEFINE_string("config", "config.json", "JSON file with model configuration
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
 
-OUTPUT_DIR = FLAGS.output_dir
+OUTPUT_DIR = FLAGS.output_dir+"/"+datetime.now().isoformat()
 INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), 'out/features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), OUTPUT_DIR+'/../features',
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), 'out/features', FLAGS.fine_tune,
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), OUTPUT_DIR+'/../features', FLAGS.fine_tune,
                                N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
@@ -298,7 +298,7 @@ def main(_):
                                           master=FLAGS.master,
                                           log_step_count_steps=1,
                                           save_summary_steps=2,
-                                          model_dir=FLAGS.output_dir,
+                                          model_dir=OUTPUT_DIR,
                                           save_checkpoints_steps=FLAGS.save_checkpoints_steps,
                                           keep_checkpoint_max=2,
                                           tpu_config=tpu_config)
