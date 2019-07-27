@@ -9,12 +9,16 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
                    compute_weighted_batch_accuracy)
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
+from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
 from utils import make_filename
+import time
 
 flags = tf.flags
 
 FLAGS = flags.FLAGS
+
+flags.DEFINE_integer("num_train_examples", 1000, "The number of training examples to train")
 
 flags.DEFINE_integer("max_seq_length", MAX_SEQ_LENGTH, "The maximum total input sequence"
                      "length after WordPiece tokenization.")
@@ -24,7 +28,7 @@ flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
 
 flags.DEFINE_string("init_checkpoint", None, '')
 
-flags.DEFINE_string("output_dir", "out/%s" % datetime.now().isoformat(),
+flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
 
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
@@ -36,6 +40,8 @@ flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
 flags.DEFINE_float("num_train_epochs", 20, "Total number of training epochs to perform.")
+
+flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for prediction.")
 
 flags.DEFINE_float(
     "warmup_proportion", 0.1, "Proportion of training to perform linear learning rate warmup for. "
@@ -69,6 +75,7 @@ tf.flags.DEFINE_string(
     "metadata.")
 
 tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
+
 tf.flags.DEFINE_bool("fine_tune", False,
                      "Whether to fine tune bert embeddings or take input as features.")
 
@@ -78,26 +85,28 @@ flags.DEFINE_integer("num_tpu_cores", 8,
 flags.DEFINE_integer("n_examples", None, "Name of tf_record file to use for input")
 flags.DEFINE_float("eval_percent", 0.1,
                    "Percent of train set for evaluation (for finding filename).")
+
+flags.DEFINE_string("tf_record", "train", "Name of tf_record file to use for input")
+
 flags.DEFINE_string("config", "config.json", "JSON file with model configuration.")
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
 
-OUTPUT_DIR = FLAGS.output_dir
+OUTPUT_DIR = FLAGS.output_dir+"/"+datetime.now().isoformat()
+
 INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), 'out/features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), OUTPUT_DIR+'/../features',
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), 'out/features', FLAGS.fine_tune,
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), OUTPUT_DIR+'/../features', FLAGS.fine_tune,
                                N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
-
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
-
 N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
@@ -122,6 +131,9 @@ def load_and_save_config(filename):
         elif parsed['model'] == 'cnn_gan':
             config_class = CNNGANConfig
             create_model = create_cnn_gan_model
+        elif parsed['model'] == 'cnnKeras':
+            config_class = CNNKerasConfig
+            create_model = create_cnnKeras_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 
@@ -129,7 +141,6 @@ def load_and_save_config(filename):
 
 
 (config, create_model) = load_and_save_config(FLAGS.config)
-
 
 def model_fn_builder(bert_config,
                      init_checkpoint,
@@ -172,7 +183,6 @@ def model_fn_builder(bert_config,
                                                   token_embeddings,
                                                   config,
                                                   segment_ids=segment_ids)
-
         tvars = tf.trainable_variables()
 
         initialized_variable_names = {}
@@ -298,7 +308,7 @@ def main(_):
                                           master=FLAGS.master,
                                           log_step_count_steps=1,
                                           save_summary_steps=2,
-                                          model_dir=FLAGS.output_dir,
+                                          model_dir=OUTPUT_DIR,
                                           save_checkpoints_steps=FLAGS.save_checkpoints_steps,
                                           keep_checkpoint_max=2,
                                           tpu_config=tpu_config)
@@ -311,6 +321,8 @@ def main(_):
             num_train_examples = math.ceil(N_TOTAL_SQUAD_EXAMPLES * (1. - FLAGS.eval_percent))
         num_train_steps = int(num_train_examples / FLAGS.train_batch_size * FLAGS.num_train_epochs)
         num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
+    print("Total training steps = %d" % num_train_steps)
+    time.sleep(2)
 
     model_fn = model_fn_builder(bert_config=bert_config,
                                 init_checkpoint=INIT_CHECKPOINT,
@@ -359,7 +371,6 @@ def main(_):
         )
 
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-
 
 if __name__ == "__main__":
     tf.app.run()

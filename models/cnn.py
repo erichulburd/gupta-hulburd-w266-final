@@ -23,8 +23,7 @@ class CNNConfig:
             'model': self.model,
         }
 
-
-def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name):
+def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name="conv_layer"):
     seq_length = layer.shape[1]
     hidden_size = layer.shape[2]
 
@@ -55,7 +54,7 @@ def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name
     return out_layer
 
 
-def create_cnn_model(is_training, token_embeddings, config: CNNConfig, segment_ids=None):
+def create_cnn_model(is_training, token_embeddings, config: CNNConfig, segment_ids=None,name="CNN"):
     """Creates a classification model."""
 
     input_shape = get_shape_list(token_embeddings, expected_rank=3)

@@ -3,7 +3,6 @@ import math
 from bert.modeling import BertConfig, get_shape_list
 from utils import mask_questions_batch
 
-
 class CNNGANConfig:
     def __init__(self, depth, generative_depth, channels_out, max_seq_length,
                  bert_config, model):
@@ -81,7 +80,8 @@ class PerSampleCNN:
         return tf.reduce_sum(out, axis=2)
 
 
-def create_cnn_gan_model(is_training, token_embeddings, config: CNNGANConfig, segment_ids=None):
+
+def create_cnn_gan_model(is_training, token_embeddings, config: CNNGANConfig, segment_ids=None,name="deconv_model"):
     """
     Impossible to train. I was getting examples/sec: 0.152973
     May need to take a closer look here and figure out if something is wrong
