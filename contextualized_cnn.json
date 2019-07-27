@@ -1,6 +1,38 @@
 {
-    "model": "cnn_gan",
-    "depth": 5,
-    "generative_depth": 100,
-    "channels_out": 1
+    "model": "contextualized_cnn",
+    "cnn_downsize": {
+        "filter_shapes": [
+            [
+                10
+            ]
+        ],
+        "pool_shapes": [
+            [
+                8
+            ]
+        ],
+        "channels_out": [
+            28
+        ]
+    },
+    "filter_generator": {
+        "filter_shapes": [
+            [
+                10
+            ]
+        ],
+        "pool_shapes": [
+            [
+                8
+            ]
+        ],
+        "channels_out": [
+            28
+        ]
+    },
+    "filter_generator_pooling": {
+        "size": 50,
+        "type": "max",
+        "strides": 25
+    }
 }
