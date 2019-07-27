@@ -9,6 +9,7 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
                    compute_weighted_batch_accuracy)
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
+from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
 from utils import make_filename
 import time
@@ -129,6 +130,9 @@ def load_and_save_config(filename: str):
         elif parsed['model'] == 'cnn_gan':
             config_class = CNNGANConfig
             create_model = create_cnn_gan_model
+        elif parsed['model'] == 'cnnKeras':
+            config_class = CNNKerasConfig
+            create_model = create_cnnKeras_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 
