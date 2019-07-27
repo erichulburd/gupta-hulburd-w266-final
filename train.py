@@ -30,6 +30,8 @@ flags.DEFINE_string("init_checkpoint", None, '')
 
 flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
+flags.DEFINE_string("features_dir", "out/features",
+                    "The output directory where the model checkpoints will be written.")
 
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
 
@@ -100,9 +102,9 @@ if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.output_dir + '/features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.features_dir,
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.output_dir + '/features',
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.features_dir,
                                FLAGS.fine_tune, N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
