@@ -1,7 +1,4 @@
 import tensorflow as tf
-from bert.modeling import BertConfig, get_shape_list
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Conv1D, MaxPooling2D, MaxPooling1D
 
 
 class CNNKerasConfig:
@@ -13,10 +10,6 @@ class CNNKerasConfig:
     bert_config: BertConfig
     '''
 
-<<<<<<< HEAD
-    def __init__(self, filter_shapes, pool_shapes, channels_out, max_seq_length, bert_config,
-                 model):
-=======
     def __init__(self,
                  filter_shapes,
                  pool_shapes,
@@ -24,7 +17,6 @@ class CNNKerasConfig:
                  max_seq_length,
                  bert_config,
                  model='cnn'):
->>>>>>> downsize and use conv1d for contextualized cnn
         self.filter_shapes = filter_shapes
         self.pool_shapes = pool_shapes
         self.channels_out = channels_out
@@ -66,10 +58,6 @@ def apply_conv_layers(is_training,
                       segment_ids=None,
                       name="CNN"):
     dropout_rate = 0.2
-    input_shape = get_shape_list(token_embeddings, expected_rank=3)
-    batch_size = input_shape[0]
-    seq_length = input_shape[1]
-    hidden_size = 768
     channels_in = 1  # Only one channel in input since we are doing NLP
 
     conv_all_layers_concatenated = []
