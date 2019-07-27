@@ -98,8 +98,6 @@ def create_contextualized_cnn_model(is_training,
         name='contextualized_cnn/downsizer',
     )
 
-    print('downsized_input.shape')
-    print(downsized_input.shape)
     assert downsized_input.shape[0].value == batch_size
     assert downsized_input.shape[1].value == seq_length
     downsized_channels_out = downsized_input.shape[-1].value
