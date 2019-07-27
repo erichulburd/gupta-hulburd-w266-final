@@ -52,6 +52,7 @@ def create_cnnKeras_model(is_training, token_embeddings, config: CNNKerasConfig,
     hidden_size = 768
     channels_in = 1   # Only one channel in input since we are doing NLP
 
+    ############################ Layer 1 of CNNs ##############################
     conv_all_layers_concatenated=[]
     for i, filter_shape in enumerate(config.filter_shapes):
         pool_shape = config.pool_shapes[i]
@@ -61,6 +62,19 @@ def create_cnnKeras_model(is_training, token_embeddings, config: CNNKerasConfig,
 
     conv = tf.keras.layers.concatenate(conv_all_layers_concatenated, axis=2)
     conv = tf.keras.layers.Dropout(rate=dropout_rate)(conv)
+
+    ############################ Layer 2 of CNNs ##############################
+    conv_all_layers_concatenated=[]
+    for i, filter_shape in enumerate(config.filter_shapes):
+        pool_shape = config.pool_shapes[i]
+        conv = _conv_layer(token_embeddings, filter_shape, channels_in, pool_shape,config.channels_out[i],
+                           ('convfilter%d' % i))
+        conv_all_layers_concatenated.append(conv)
+
+    conv = tf.keras.layers.concatenate(conv_all_layers_concatenated, axis=2)
+    conv = tf.keras.layers.Dropout(rate=dropout_rate)(conv)
+
+    ##################### Fully connected layer ###############################
     n_positions = 2  # start and end logits
 
     logits = tf.keras.layers.Dense(n_positions, activation='softmax')(conv)
