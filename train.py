@@ -111,12 +111,12 @@ N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
 def load_and_save_config(filename: str):
-    with open(filename) as json_data:
+    with tf.gfile.GFile(filename, 'r') as json_data:
         parsed = json.load(json_data)
         parsed['max_seq_length'] = FLAGS.max_seq_length
         parsed['bert_config'] = bert_config.to_dict()
 
-        with open('%s/config.json' % OUTPUT_DIR, 'w') as f:
+        with tf.gfile.GFile('%s/config.json' % OUTPUT_DIR, 'w') as f:
             json.dump(parsed, f)
         parsed['bert_config'] = bert_config
 

@@ -113,8 +113,6 @@ def create_contextualized_cnn_model(is_training,
                                 name='contextualized_cnn/filter_generator',
                                 dropout_rate=0.)
 
-    print('filters.shape')
-    print(filters.shape)
     assert filters.shape[0].value == batch_size
     assert filters.shape[1].value == seq_length
     n_filters = int(filters.shape[2].value / downsized_channels_out)
@@ -126,9 +124,6 @@ def create_contextualized_cnn_model(is_training,
         filters = tf.nn.max_pool1d(filters, pooling_size, pooling_strides, 'VALID')
     elif config.filter_generator_pooling['type'] == 'min':
         filters = tf.nn.avg_pool1d(filters, pooling_size, pooling_strides, 'VALID')
-
-    print('filters.shape (2)')
-    print(filters.shape)
 
     contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters)
 
