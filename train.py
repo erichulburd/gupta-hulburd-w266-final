@@ -100,9 +100,9 @@ if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), OUTPUT_DIR + '/../features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.output_dir + '/features',
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), OUTPUT_DIR + '/../features',
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.output_dir + '/features',
                                FLAGS.fine_tune, N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
