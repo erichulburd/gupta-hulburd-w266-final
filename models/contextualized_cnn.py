@@ -33,7 +33,6 @@ class ContextualizedCNNConfig:
 
     def _validate(self):
         assert self.cnn_downsize.channels_out[-1] <= self.filter_generator.channels_out[0]
-        print(self.filter_generator.channels_out[0] % self.cnn_downsize.channels_out[-1])
         assert (self.filter_generator.channels_out[0] % self.cnn_downsize.channels_out[-1]) == 0
 
     def serialize(self):
