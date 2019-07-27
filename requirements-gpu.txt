@@ -1,4 +1,4 @@
 flake8==3.7.7
 numpy==1.16.4
-tensorflow-gpu==1.12  # CPU Version of TensorFlow.
+tensorflow-gpu==1.14  # CPU Version of TensorFlow.
 yapf==0.27.0
