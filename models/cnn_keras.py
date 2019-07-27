@@ -13,8 +13,18 @@ class CNNKerasConfig:
     bert_config: BertConfig
     '''
 
+<<<<<<< HEAD
     def __init__(self, filter_shapes, pool_shapes, channels_out, max_seq_length, bert_config,
                  model):
+=======
+    def __init__(self,
+                 filter_shapes,
+                 pool_shapes,
+                 channels_out,
+                 max_seq_length,
+                 bert_config,
+                 model='cnn'):
+>>>>>>> downsize and use conv1d for contextualized cnn
         self.filter_shapes = filter_shapes
         self.pool_shapes = pool_shapes
         self.channels_out = channels_out
@@ -69,7 +79,15 @@ def apply_conv_layers(is_training,
                            config.channels_out[i], ('convfilter%d' % i))
         conv_all_layers_concatenated.append(conv)
 
-    conv = tf.keras.layers.concatenate(conv_all_layers_concatenated, axis=2)
+    conv = None
+    if len(conv_all_layers_concatenated) < 2:
+        conv = conv_all_layers_concatenated[0]
+    else:
+        conv = tf.keras.layers.concatenate(conv_all_layers_concatenated, axis=2)
+
+    if dropout_rate == 0.:
+        return conv
+
     return tf.keras.layers.Dropout(rate=dropout_rate)(conv)
 
 

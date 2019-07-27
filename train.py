@@ -10,7 +10,7 @@ from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
-from models.contextualized_cnn import create_cnn_gan_model, CNNGANConfig
+from models.contextualized_cnn import create_contextualized_cnn_model, ContextualizedCNNConfig
 from utils import make_filename
 import time
 
@@ -93,21 +93,22 @@ flags.DEFINE_string("config", "config.json", "JSON file with model configuration
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
 
-OUTPUT_DIR = FLAGS.output_dir+"/"+datetime.now().isoformat()
+OUTPUT_DIR = FLAGS.output_dir + "/" + datetime.now().isoformat()
 
 INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), OUTPUT_DIR+'/../features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), OUTPUT_DIR + '/../features',
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), OUTPUT_DIR+'/../features', FLAGS.fine_tune,
-                               N_TRAIN_EXAMPLES)
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), OUTPUT_DIR + '/../features',
+                               FLAGS.fine_tune, N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
 N_TOTAL_SQUAD_EXAMPLES = 130319
+
 
 def load_and_save_config(filename: str):
     with open(filename) as json_data:
@@ -127,12 +128,12 @@ def load_and_save_config(filename: str):
         elif parsed['model'] == 'cnn':
             config_class = CNNConfig
             create_model = create_cnn_model
-        elif parsed['model'] == 'cnn_gan':
-            config_class = CNNGANConfig
-            create_model = create_cnn_gan_model
         elif parsed['model'] == 'cnnKeras':
             config_class = CNNKerasConfig
             create_model = create_cnnKeras_model
+        elif parsed['model'] == 'contextualized_cnn':
+            config_class = ContextualizedCNNConfig
+            create_model = create_contextualized_cnn_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 
@@ -140,6 +141,7 @@ def load_and_save_config(filename: str):
 
 
 (config, create_model) = load_and_save_config(FLAGS.config)
+
 
 def model_fn_builder(bert_config,
                      init_checkpoint,
@@ -370,6 +372,7 @@ def main(_):
         )
 
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
 
 if __name__ == "__main__":
     tf.app.run()
