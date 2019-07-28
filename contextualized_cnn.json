@@ -2,17 +2,13 @@
     "model": "contextualized_cnn",
     "cnn_downsize": {
         "filter_shapes": [
-            [
-                10
-            ]
+            []
         ],
         "pool_shapes": [
-            [
-                8
-            ]
+            []
         ],
         "channels_out": [
-            28
+            768
         ]
     },
     "filter_generator": {
@@ -27,13 +23,13 @@
             ]
         ],
         "channels_out": [
-            112
+            1536
         ]
     },
     "filter_generator_pooling": {
-        "size": 50,
+        "size": 100,
         "type": "max",
-        "strides": 25
+        "strides": 50
     },
     "mask_questions": true
 }
