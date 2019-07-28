@@ -11,6 +11,7 @@ from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_contextualized_cnn_model, ContextualizedCNNConfig
+from models.fully_connected import create_fully_connected_model, FullyConnectedConfig
 from utils import make_filename
 import time
 
@@ -136,6 +137,9 @@ def load_and_save_config(filename):
         elif parsed['model'] == 'contextualized_cnn':
             config_class = ContextualizedCNNConfig
             create_model = create_contextualized_cnn_model
+        elif parsed['model'] == 'fully_connected':
+            config_class = FullyConnectedConfig
+            create_model = create_fully_connected_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 

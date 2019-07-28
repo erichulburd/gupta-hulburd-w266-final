@@ -2,7 +2,25 @@ import tensorflow as tf
 from bert.modeling import get_shape_list
 
 
-def _create_fully_connected_model(is_training, token_embeddings):
+
+class FullyConnectedConfig:
+
+    def __init__(self,
+                 max_seq_length,
+                 bert_config,
+                 model='fully_connected'):
+        self.max_seq_length = max_seq_length
+        self.bert_config = bert_config
+        self.model = model
+
+    def serialize(self):
+        return {
+            'max_seq_length': self.max_seq_length,
+            'bert_config': self.bert_config.to_dict(),
+            'model': self.model,
+        }
+
+def create_fully_connected_model(is_training, token_embeddings, config=None, segment_ids=None):
     """Creates a classification model."""
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
     batch_size = input_shape[0]
@@ -12,16 +30,20 @@ def _create_fully_connected_model(is_training, token_embeddings):
     channels_in = 1
 
     n_positions = 2  # start and end logits
-    wd1 = tf.Variable(tf.truncated_normal([hidden_size * channels_in, n_positions], stddev=0.03),
-                      name='wd1')
-    bd1 = tf.Variable(tf.truncated_normal([n_positions], stddev=0.01), name='bd1')
 
-    token_embeddings = tf.reshape(token_embeddings,
-                                  [batch_size * seq_length, hidden_size * channels_in])
-    logits = tf.matmul(token_embeddings, wd1)
-    logits = tf.nn.bias_add(logits, bd1)
+    output_weights = tf.get_variable(
+        "cls/squad/output_weights", [2, hidden_size],
+        initializer=tf.truncated_normal_initializer(stddev=0.02))
 
-    logits = tf.reshape(logits, [batch_size, seq_length, n_positions])
+    output_bias = tf.get_variable(
+        "cls/squad/output_bias", [2], initializer=tf.zeros_initializer())
+
+    final_hidden_matrix = tf.reshape(token_embeddings,
+                                    [batch_size * seq_length, hidden_size])
+    logits = tf.matmul(final_hidden_matrix, output_weights, transpose_b=True)
+    logits = tf.nn.bias_add(logits, output_bias)
+
+    logits = tf.reshape(logits, [batch_size, seq_length, 2])
     logits = tf.transpose(logits, [2, 0, 1])
 
     unstacked_logits = tf.unstack(logits, axis=0)
