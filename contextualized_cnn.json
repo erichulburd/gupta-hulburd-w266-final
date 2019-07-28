@@ -19,7 +19,7 @@
             ]
         ],
         "channels_out": [
-            3136
+            3072
         ]
     },
     "filter_generator_pooling": {
