@@ -122,6 +122,8 @@ def create_contextualized_cnn_model(is_training,
     assert filters.shape[0].value == batch_size
     assert filters.shape[1].value == seq_length
     n_filters = int(filters.shape[2].value / downsized_channels_out)
+    assert (n_filters % 2) == 0
+
 
     filter_generator_pooling = config.filter_generator_pooling
     pooling_size = [filter_generator_pooling['size'], 1, 1]
@@ -133,18 +135,21 @@ def create_contextualized_cnn_model(is_training,
 
     contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters)
 
-    n_positions = 2  # start and end logits
-    wd1 = tf.Variable(tf.truncated_normal([n_filters, n_positions], stddev=0.03), name='wd1')
-    bd1 = tf.Variable(tf.truncated_normal([n_positions], stddev=0.01), name='bd1')
+    (start_features, end_features) = tf.split(contextualized, 2, axis=2)
 
-    logits = tf.matmul(contextualized, wd1)
-    logits = tf.nn.bias_add(logits, bd1)
+    feature_channels_out = int(n_filters/2.)
+    def compute_logits(features):
+        wd1 = tf.Variable(tf.truncated_normal([feature_channels_out, 1], stddev=0.03), name='wd1')
+        bd1 = tf.Variable(tf.truncated_normal([1], stddev=0.01), name='bd1')
 
-    logits = tf.reshape(logits, [batch_size, seq_length, n_positions])
-    logits = tf.transpose(logits, [2, 0, 1])
+        logits = tf.matmul(features, wd1)
+        logits = tf.nn.bias_add(logits, bd1)
 
-    unstacked_logits = tf.unstack(logits, axis=0)
+        logits = tf.reshape(logits, [batch_size, seq_length])
 
-    (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
+        return logits
+
+    start_logits = compute_logits(start_features)
+    end_logits = compute_logits(end_features)
 
     return (start_logits, end_logits)
