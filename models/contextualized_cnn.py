@@ -19,6 +19,7 @@ class ContextualizedCNNConfig:
                  filter_generator,
                  filter_generator_pooling,
                  bert_config,
+                 mask_questions=True,
                  model='contextualized_cnn'):
         self.max_seq_length = max_seq_length
         cnn_downsize['bert_config'] = bert_config
@@ -44,6 +45,7 @@ class ContextualizedCNNConfig:
             'filter_generator': self.filter_generator.serialize(),
             'filter_generator_pooling': self.filter_generator_pooling,
             'bert_config': self.bert_config.to_dict(),
+            'mask_questions': self.mask_questions,
             'model': self.model
         }
 
@@ -92,19 +94,23 @@ def create_contextualized_cnn_model(is_training,
 
     channels_in = 1
 
-    downsized_input = apply_conv_layers(
-        is_training,
-        token_embeddings,
-        config.cnn_downsize,
-        dropout_rate=0.,
-        name='contextualized_cnn/downsizer',
-    )
+    downsized_input = token_embeddings
+    if len(config.cnn_downsize.filter_shapes) > 0:
+        downsized_input = apply_conv_layers(
+            is_training,
+            token_embeddings,
+            config.cnn_downsize,
+            dropout_rate=0.,
+            name='contextualized_cnn/downsizer',
+        )
 
     assert downsized_input.shape[0].value == batch_size
     assert downsized_input.shape[1].value == seq_length
     downsized_channels_out = downsized_input.shape[-1].value
 
-    paragraphs = mask_questions_batch(downsized_input, segment_ids, downsized_channels_out)
+    paragraphs = downsized_input
+    if config.mask_questions:
+        paragraphs = mask_questions_batch(downsized_input, segment_ids, downsized_channels_out)
 
     filters = apply_conv_layers(is_training,
                                 downsized_input,

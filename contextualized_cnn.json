@@ -12,7 +12,7 @@
             ]
         ],
         "channels_out": [
-            28
+            56
         ]
     },
     "filter_generator": {
@@ -27,12 +27,13 @@
             ]
         ],
         "channels_out": [
-            28
+            112
         ]
     },
     "filter_generator_pooling": {
         "size": 50,
         "type": "avg",
         "strides": 25
-    }
+    },
+    "mask_questions": true
 }
