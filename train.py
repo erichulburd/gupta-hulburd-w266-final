@@ -6,23 +6,17 @@ from bert import modeling
 from bert.modeling import get_assignment_map_from_checkpoint, get_shape_list, BertConfig
 from bert.optimization import create_optimizer
 from utils import (MAX_SEQ_LENGTH, input_fn_builder, compute_batch_accuracy,
-                   compute_weighted_batch_accuracy, compute_batch_logloss)
+                   compute_weighted_batch_accuracy)
 from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_contextualized_cnn_model, ContextualizedCNNConfig
 from utils import make_filename
 import time
-import six
-import os
-import tokenization
 
 flags = tf.flags
 
 FLAGS = flags.FLAGS
-
-flags.DEFINE_string("vocab_file", "data/uncased_L-12_H-768_A-12/vocab.txt",
-                    "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_integer("num_train_examples", 1000, "The number of training examples to train")
 
@@ -31,32 +25,8 @@ flags.DEFINE_integer("max_seq_length", MAX_SEQ_LENGTH, "The maximum total input 
 
 flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
                     'directory containing BERT config and checkpoints')
-flags.DEFINE_string(
-    "predict_file", 'data/squad/dev-v2.0.json',
-    "SQuAD json for predictions. E.g., dev-v1.1.json or test-v1.1.json")
 
-flags.DEFINE_integer(
-    "doc_stride", 128,
-    "When splitting up a long document into chunks, how much stride to "
-    "take between chunks.")
-
-flags.DEFINE_integer(
-    "max_query_length", 64,
-    "The maximum number of tokens for the question. Questions longer than "
-    "this will be truncated to this length.")
-
-flags.DEFINE_integer(
-    "n_best_size", 20,
-    "The total number of n-best predictions to generate in the "
-    "nbest_predictions.json output file.")
-
-flags.DEFINE_integer(
-    "max_answer_length", 30,
-    "The maximum length of an answer that can be generated. This is needed "
-    "because the start and end predictions are not conditioned on one another.")
-
-flags.DEFINE_string("init_checkpoint", None, 'Model checkpoint full path to ckpt file')
-flags.DEFINE_string("predictions_dir", "predictions", 'Directory to store predictions file')
+flags.DEFINE_string("init_checkpoint", None, '')
 
 flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
@@ -127,7 +97,7 @@ OUTPUT_DIR = FLAGS.output_dir + "/" + datetime.now().isoformat()
 
 INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
-    INIT_CHECKPOINT = '%s' % (FLAGS.init_checkpoint)
+    INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
 TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.output_dir + '/features',
@@ -136,8 +106,6 @@ EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.output_dir + 
                                FLAGS.fine_tune, N_TRAIN_EXAMPLES)
 
 tf.gfile.MakeDirs(OUTPUT_DIR)
-tf.gfile.MakeDirs(PRED_DIR)
-
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
 N_TOTAL_SQUAD_EXAMPLES = 130319
 
@@ -244,7 +212,28 @@ def model_fn_builder(bert_config,
 
         seq_length = get_shape_list(input_ids)[1]
 
-        def write_summaries(family,start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy):
+        def compute_loss(logits, positions):
+            one_hot_positions = tf.one_hot(positions, depth=seq_length, dtype=tf.float32)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
+            loss = -tf.reduce_mean(tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
+            return loss
+
+        start_positions = features["start_positions"]
+        end_positions = features["end_positions"]
+
+        start_loss = compute_loss(start_logits, start_positions)
+        end_loss = compute_loss(end_logits, end_positions)
+
+        total_loss = (start_loss + end_loss) / 2.0
+
+        start_accuracy = compute_batch_accuracy(start_logits, start_positions)
+        end_accuracy = compute_batch_accuracy(end_logits, end_positions)
+        start_weighted5_accuracy = compute_weighted_batch_accuracy(start_logits,
+                                                                   start_positions,
+                                                                   k=5)
+        end_weighted5_accuracy = compute_weighted_batch_accuracy(end_logits, end_positions, k=5)
+
+        def write_summaries(family):
             tf.summary.scalar("start_loss", start_loss, family=family)
             tf.summary.scalar("end_loss", end_loss, family=family)
             tf.summary.scalar("total_loss", total_loss, family=family)
@@ -254,28 +243,8 @@ def model_fn_builder(bert_config,
             tf.summary.scalar("start_weighted5_accuracy", start_weighted5_accuracy, family=family)
             tf.summary.scalar("end_weighted5_accuracy", end_weighted5_accuracy, family=family)
 
-        def computeAccuracies(features):
-            def compute_loss(logits, positions):
-                one_hot_positions = tf.one_hot(positions, depth=seq_length, dtype=tf.float32)
-                log_probs = tf.nn.log_softmax(logits, axis=-1)
-                loss = -tf.reduce_mean(tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
-                return loss
-            start_positions = features["start_positions"]
-            end_positions = features["end_positions"]
-            start_loss = compute_loss(start_logits, start_positions)
-            end_loss = compute_loss(end_logits, end_positions)
-            total_loss = (start_loss + end_loss) / 2.0
-            start_accuracy = compute_batch_accuracy(start_logits, start_positions)
-            end_accuracy = compute_batch_accuracy(end_logits, end_positions)
-            start_weighted5_accuracy = compute_weighted_batch_accuracy(start_logits,
-                                                                       start_positions,
-                                                                       k=5)
-            end_weighted5_accuracy = compute_weighted_batch_accuracy(end_logits, end_positions, k=5)
-            return start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy
-
         if mode == tf.estimator.ModeKeys.TRAIN:
-            start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy = computeAccuracies(features)
-            write_summaries('train',start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy)
+            write_summaries('train')
 
             # NOTE: We are using BERT's AdamWeightDecayOptimizer. We may want to reconsider
             # this if we are not able to effectively train.
@@ -293,9 +262,7 @@ def model_fn_builder(bert_config,
                                                           training_hooks=[summaries],
                                                           scaffold_fn=scaffold_fn)
         elif mode == tf.estimator.ModeKeys.EVAL:
-            start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy = computeAccuracies(features)
-            write_summaries('eval',start_loss,end_loss,total_loss,start_accuracy,end_accuracy,start_weighted5_accuracy,end_weighted5_accuracy)
-
+            write_summaries('eval')
             summaries = tf.train.SummarySaverHook(
                 save_steps=1,
                 output_dir=OUTPUT_DIR,
@@ -349,15 +316,14 @@ def main(_):
 
     num_train_steps = None
     num_warmup_steps = None
-    tokenizer = tokenization.FullTokenizer(vocab_file=FLAGS.vocab_file,
-                                                    do_lower_case=True)
-
     if FLAGS.do_train:
         num_train_examples = N_TRAIN_EXAMPLES
         if num_train_examples is None:
             num_train_examples = math.ceil(N_TOTAL_SQUAD_EXAMPLES * (1. - FLAGS.eval_percent))
         num_train_steps = int(num_train_examples / FLAGS.train_batch_size * FLAGS.num_train_epochs)
         num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
+    print("Total training steps = %d" % num_train_steps)
+    time.sleep(2)
 
     model_fn = model_fn_builder(bert_config=bert_config,
                                 init_checkpoint=INIT_CHECKPOINT,
@@ -406,64 +372,6 @@ def main(_):
         )
 
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-    if FLAGS.do_predict:
-      eval_examples = read_squad_examples(
-          input_file=FLAGS.predict_file, is_training=False)
-      filename = PRED_DIR+"/eval.tf_record"
-      eval_writer = FeatureWriter(filename,is_training=False)
-      eval_features = []
-
-      def append_feature(feature):
-        eval_features.append(feature)
-        eval_writer.process_feature(feature)
-
-      convert_examples_to_features(
-          examples=eval_examples,
-          tokenizer=tokenizer,
-          max_seq_length=FLAGS.max_seq_length,
-          doc_stride=FLAGS.doc_stride,
-          max_query_length=FLAGS.max_query_length,
-          is_training=False,
-          output_fn=append_feature)
-      eval_writer.close()
-
-      tf.logging.info("***** Running predictions *****")
-      tf.logging.info("  Num orig examples = %d", len(eval_examples))
-      tf.logging.info("  Num split examples = %d", len(eval_features))
-      tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
-      exit()
-      all_results = []
-
-      predict_input_fn = input_fn_builder(
-          input_file=eval_writer.filename,
-          seq_length=FLAGS.max_seq_length,
-          is_training=False,
-          drop_remainder=False,
-          bert_config=bert_config)
-
-      # If running eval on the TPU, you will need to specify the number of
-      # steps.
-      all_results = []
-      for result in estimator.predict(
-          predict_input_fn, yield_single_examples=True):
-        if len(all_results) % 1000 == 0:
-          tf.logging.info("Processing example: %d" % (len(all_results)))
-        unique_id = int(result["unique_ids"])
-        start_logits = [float(x) for x in result["start_logits"].flat]
-        end_logits = [float(x) for x in result["end_logits"].flat]
-        all_results.append(
-            RawResult(
-                unique_id=unique_id,
-                start_logits=start_logits,
-                end_logits=end_logits))
-
-      output_prediction_file = os.path.join(FLAGS.output_dir, "predictions.json")
-      output_nbest_file = os.path.join(FLAGS.output_dir, "nbest_predictions.json")
-      output_null_log_odds_file = os.path.join(FLAGS.output_dir, "null_odds.json")
-      write_predictions(eval_examples, eval_features, all_results,
-                        FLAGS.n_best_size, FLAGS.max_answer_length,
-                        True, output_prediction_file,
-                        output_nbest_file, output_null_log_odds_file)
 
 
 if __name__ == "__main__":
