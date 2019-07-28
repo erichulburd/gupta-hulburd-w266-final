@@ -2,22 +2,22 @@
     "model": "cnnKeras",
     "filter_shapes": [
         [
-            10
+            384
         ],
         [
-            6
+            20
         ]
     ],
     "pool_shapes": [
         [
-            4
+            1
         ],
         [
-            4
+            1
         ]
     ],
     "channels_out": [
-        6,
-        8
+        4,
+        4
     ]
 }

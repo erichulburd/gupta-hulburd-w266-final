@@ -97,7 +97,7 @@ flags.DEFINE_integer("batch_size", 32, "Total batch size.")
 
 flags.DEFINE_float("eval_percent", 0.1, "Percent of training to set aside for validation")
 
-flags.DEFINE_string("output_dir", 'out/features/',
+flags.DEFINE_string("output_dir", 'out',
                     "The output directory where the model checkpoints will be written.")
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
@@ -562,8 +562,8 @@ def main(_):
     bert_config = modeling.BertConfig.from_json_file(BERT_CONFIG_FILE)
 
     validate_flags_or_throw(bert_config)
-
-    tf.gfile.MakeDirs(FLAGS.output_dir)
+    OUTPUT_DIR = FLAGS.output_dir+"/features"
+    tf.gfile.MakeDirs(OUTPUT_DIR)
 
     writer_fn = None
     if FLAGS.fine_tune:
@@ -572,13 +572,13 @@ def main(_):
         writer_fn = write_bert_embeddings
 
     if FLAGS.write_test:
-        writer_fn(TEST_FILE, False, [os.path.join(FLAGS.output_dir, "test.tf_record")], [1.0])
+        writer_fn(TEST_FILE, False, [os.path.join(OUTPUT_DIR, "test.tf_record")], [1.0])
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
     set_names = ['train', 'eval']
 
     writer_fn(TRAIN_FILE, True, [
-        make_filename(set_name, split, FLAGS.output_dir, FLAGS.fine_tune, FLAGS.n_examples)
+        make_filename(set_name, split, OUTPUT_DIR, FLAGS.fine_tune, FLAGS.n_examples)
         for set_name, split in zip(set_names, splits)
     ], splits, FLAGS.n_examples)
 
