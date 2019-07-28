@@ -30,6 +30,7 @@ class ContextualizedCNNConfig:
         self.filter_generator = CNNKerasConfig(**filter_generator)
         self.filter_generator_pooling = filter_generator_pooling
         self.bert_config = bert_config
+        self.mask_questions = mask_questions
         self.model = model
 
         self._validate()
