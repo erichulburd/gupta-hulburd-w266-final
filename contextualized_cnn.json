@@ -18,7 +18,7 @@
     "filter_generator": {
         "filter_shapes": [
             [
-                10
+                5
             ]
         ],
         "pool_shapes": [
@@ -32,7 +32,7 @@
     },
     "filter_generator_pooling": {
         "size": 50,
-        "type": "max",
+        "type": "avg",
         "strides": 25
     }
 }

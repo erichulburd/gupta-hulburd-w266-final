@@ -121,7 +121,7 @@ def create_contextualized_cnn_model(is_training,
     pooling_strides = [filter_generator_pooling['strides'], 1, 1]
     if config.filter_generator_pooling['type'] == 'max':
         filters = tf.nn.max_pool1d(filters, pooling_size, pooling_strides, 'VALID')
-    elif config.filter_generator_pooling['type'] == 'min':
+    elif config.filter_generator_pooling['type'] == 'avg':
         filters = tf.nn.avg_pool1d(filters, pooling_size, pooling_strides, 'VALID')
 
     contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters)
