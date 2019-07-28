@@ -1,12 +1,8 @@
 {
     "model": "contextualized_cnn",
     "cnn_downsize": {
-        "filter_shapes": [
-            []
-        ],
-        "pool_shapes": [
-            []
-        ],
+        "filter_shapes": [],
+        "pool_shapes": [],
         "channels_out": [
             768
         ]
