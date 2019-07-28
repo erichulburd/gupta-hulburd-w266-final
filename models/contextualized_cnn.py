@@ -1,94 +1,82 @@
 import tensorflow as tf
-import math
 from bert.modeling import BertConfig, get_shape_list
 from utils import mask_questions_batch
+from models.cnn_keras import CNNKerasConfig, apply_conv_layers
 
-class CNNGANConfig:
-    depth: int
-    generative_depth: int
-    channels_out: int
+
+class ContextualizedCNNConfig:
     max_seq_length: int
-    model: str
+    filter_generator_pooling: dict
+    filter_generator: dict
+    cnn_downsize: dict
     bert_cong: BertConfig
 
-    def __init__(self, depth: int, generative_depth: int, channels_out: int, max_seq_length: int,
-                 bert_config: BertConfig, model: str):
-        self.depth = depth
-        self.channels_out = channels_out
+    def __init__(self,
+                 max_seq_length: int,
+                 cnn_downsize: dict,
+                 filter_generator: dict,
+                 filter_generator_pooling: dict,
+                 bert_config: BertConfig,
+                 model: str = 'contextualized_cnn'):
         self.max_seq_length = max_seq_length
+        cnn_downsize['bert_config'] = bert_config
+        cnn_downsize['max_seq_length'] = max_seq_length
+        self.cnn_downsize = CNNKerasConfig(**cnn_downsize)
+        filter_generator['bert_config'] = bert_config
+        filter_generator['max_seq_length'] = max_seq_length
+        self.filter_generator = CNNKerasConfig(**filter_generator)
+        self.filter_generator_pooling = filter_generator_pooling
         self.bert_config = bert_config
-        self.generative_depth = generative_depth
         self.model = model
+
+        self._validate()
+
+    def _validate(self):
+        assert self.cnn_downsize.channels_out[-1] <= self.filter_generator.channels_out[0]
+        assert (self.filter_generator.channels_out[0] % self.cnn_downsize.channels_out[-1]) == 0
 
     def serialize(self):
         return {
-            'depth': self.depth,
-            'generative_depth': self.generative_depth,
-            'channels_out': self.channels_out,
             'max_seq_length': self.max_seq_length,
+            'cnn_downsize': self.cnn_downsize.serialize(),
+            'filter_generator': self.filter_generator.serialize(),
+            'filter_generator_pooling': self.filter_generator_pooling,
             'bert_config': self.bert_config.to_dict(),
             'model': self.model
         }
 
 
-class PerSampleCNN:
-    """
-    Inspired by
-    https://stackoverflow.com/questions/42068999/tensorflow-convolutions-with-different-filter-for-each-sample-in-the-mini-batch#42086729
-    """
+def apply_per_sample_conv1d(a, filters, n_filters):
+    batch_size = a.shape[0].value
+    seq_length = a.shape[1].value
+    channels_in = a.shape[2].value
 
-    def __init__(
-            self,
-            # shape (batch_size, seq_length, hidden_depth, channels_in)
-            inpt: tf.Tensor,
-            # shape (batch_size, filter_height, filter_width, channels_in, channels_out)
-            filters: tf.Tensor):
-        self.input = inpt
-        self.filters = filters
+    a = tf.transpose(a, [1, 0, 2])
+    a = tf.reshape(a, [1, seq_length, 1, batch_size * channels_in])
 
-    def _validate(self):
-        assert len(self.input.shape) == 4
-        assert len(self.filters.shape) == 5
-        # batch_size should match
-        assert self.input.shape[0] == self.filters.shape[0]
-        # sequence length should be gte than filter height
-        assert self.input.shape[1] >= self.filters.shape[1]
-        # input hidden depth should equal filter width in NLP context
-        assert self.input.shape[2] == self.filters.shape[2]
-        # channels in should match.
-        assert self.input.shape[3] == self.filters.shape[3]
+    assert filters.shape[0].value == batch_size
+    filter_length = filters.shape[1].value
+    assert filter_length <= seq_length
+    assert filters.shape[2].value == channels_in * n_filters
 
-    def apply(self):
-        self._validate()
+    filters = tf.reshape(filters, [batch_size, filter_length, channels_in, n_filters])
 
-        batch_size = self.input.shape[0]
-        seq_length = self.input.shape[1]
-        filter_height = self.filters.shape[1]
-        width = self.input.shape[2]
-        channels_in = self.input.shape[3]
-        channels_out = self.filters.shape[4]
+    filters = tf.transpose(filters, [1, 0, 3, 2])
+    filters = tf.reshape(filters, [filter_length, 1, channels_in * batch_size, n_filters])
 
-        virtual_channels_in = batch_size * channels_in
+    result = tf.nn.depthwise_conv2d(a, filters, strides=[1, 1, 1, 1], padding='SAME')
+    result = tf.reshape(result, [seq_length, batch_size, channels_in, n_filters])
+    result = tf.transpose(result, [1, 0, 2, 3])
 
-        filters = tf.transpose(self.filters, [1, 2, 0, 3, 4])
-        filters = tf.reshape(filters, [filter_height, width, virtual_channels_in, channels_out])
-
-        inpt = tf.transpose(self.input, [1, 2, 0, 3])  # shape (H, W, MB, channels_in)
-        inpt = tf.reshape(inpt, [1, seq_length, width, virtual_channels_in])
-
-        out = tf.nn.depthwise_conv2d(inpt, filter=filters, strides=[1, 1, 1, 1], padding="SAME")
-
-        out = tf.reshape(out, [seq_length, width, batch_size, channels_in, channels_out])
-
-        out = tf.transpose(out, [2, 0, 1, 3, 4])
-        # sum over channels_in
-        out = tf.reduce_sum(out, axis=3)
-        # sum over width (ie hidden_size)
-        return tf.reduce_sum(out, axis=2)
+    result = tf.reduce_sum(result, axis=2)
+    return result
 
 
-
-def create_cnn_gan_model(is_training, token_embeddings, config: CNNGANConfig, segment_ids=None,name="deconv_model"):
+def create_contextualized_cnn_model(is_training,
+                                    token_embeddings,
+                                    config: ContextualizedCNNConfig,
+                                    segment_ids=None,
+                                    name="deconv_model"):
     """
     Impossible to train. I was getting examples/sec: 0.152973
     May need to take a closer look here and figure out if something is wrong
@@ -99,58 +87,48 @@ def create_cnn_gan_model(is_training, token_embeddings, config: CNNGANConfig, se
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
     batch_size = input_shape[0]
     seq_length = input_shape[1]
-    assert config.depth <= seq_length
-    hidden_size = input_shape[2]
-    assert config.generative_depth * config.depth >= seq_length
 
     channels_in = 1
-    channels_out = config.channels_out
 
-    paragraphs = mask_questions_batch(token_embeddings, segment_ids, hidden_size)
-    token_embeddings = tf.reshape(token_embeddings,
-                                  [batch_size, seq_length, hidden_size, channels_in])
+    downsized_input = apply_conv_layers(
+        is_training,
+        token_embeddings,
+        config.cnn_downsize,
+        dropout_rate=0.,
+        name='contextualized_cnn/downsizer',
+    )
 
-    # initialise weights and bias for the filter
-    conv_filt_shape = [config.generative_depth, hidden_size, channels_in, channels_out]
-    weights = tf.Variable(tf.truncated_normal(conv_filt_shape, stddev=0.03), name='deconv_W')
-    bias = tf.Variable(tf.truncated_normal([channels_out]), name='deconv_b')
+    assert downsized_input.shape[0].value == batch_size
+    assert downsized_input.shape[1].value == seq_length
+    downsized_channels_out = downsized_input.shape[-1].value
 
-    # setup the convolutional layer operation
-    stride_height = math.ceil((seq_length - config.generative_depth) / (float(config.depth) - 1.))
-    padding = stride_height * (config.depth - 1) - (seq_length - config.generative_depth)
-    padding_top = int(padding / 2)
-    padding_bottom = padding - padding_top
-    filters = tf.nn.conv2d(token_embeddings,
-                           weights, [1, stride_height, 1, 1],
-                           data_format='NHWC',
-                           padding=[
-                               [0, 0],
-                               [padding_top, padding_bottom],
-                               [math.floor(hidden_size / 2.),
-                                math.floor(hidden_size / 2.) - 1],
-                               [0, 0],
-                           ])
+    paragraphs = mask_questions_batch(downsized_input, segment_ids, downsized_channels_out)
 
-    print({
-        'stride_height': stride_height,
-        'padding_top': padding_top,
-        'padding_bottom': padding_bottom,
-        'n_strides': config.depth - 1,
-        'strided_length': config.generative_depth + stride_height * (config.depth - 1)
-    })
-    # add the bias
-    filters += bias
-    filters = tf.reshape(filters,
-                         [batch_size, config.depth, hidden_size, channels_in, channels_out])
+    filters = apply_conv_layers(is_training,
+                                downsized_input,
+                                config.filter_generator,
+                                name='contextualized_cnn/filter_generator',
+                                dropout_rate=0.)
 
-    paragraphs = tf.reshape(paragraphs, [batch_size, seq_length, hidden_size, channels_in])
-    conv = PerSampleCNN(inpt=paragraphs, filters=filters).apply()
+    assert filters.shape[0].value == batch_size
+    assert filters.shape[1].value == seq_length
+    n_filters = int(filters.shape[2].value / downsized_channels_out)
+
+    filter_generator_pooling = config.filter_generator_pooling
+    pooling_size = [filter_generator_pooling['size'], 1, 1]
+    pooling_strides = [filter_generator_pooling['strides'], 1, 1]
+    if config.filter_generator_pooling['type'] == 'max':
+        filters = tf.nn.max_pool1d(filters, pooling_size, pooling_strides, 'VALID')
+    elif config.filter_generator_pooling['type'] == 'min':
+        filters = tf.nn.avg_pool1d(filters, pooling_size, pooling_strides, 'VALID')
+
+    contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters)
 
     n_positions = 2  # start and end logits
-    wd1 = tf.Variable(tf.truncated_normal([channels_out, n_positions], stddev=0.03), name='wd1')
+    wd1 = tf.Variable(tf.truncated_normal([n_filters, n_positions], stddev=0.03), name='wd1')
     bd1 = tf.Variable(tf.truncated_normal([n_positions], stddev=0.01), name='bd1')
 
-    logits = tf.matmul(conv, wd1)
+    logits = tf.matmul(contextualized, wd1)
     logits = tf.nn.bias_add(logits, bd1)
 
     logits = tf.reshape(logits, [batch_size, seq_length, n_positions])
