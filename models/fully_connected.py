@@ -8,19 +8,22 @@ class FullyConnectedConfig:
     def __init__(self,
                  max_seq_length,
                  bert_config,
+                 mask_questions=False,
                  model='fully_connected'):
         self.max_seq_length = max_seq_length
+        self.mask_questions = mask_questions
         self.bert_config = bert_config
         self.model = model
 
     def serialize(self):
         return {
             'max_seq_length': self.max_seq_length,
+            'mask_questions': self.mask_questions,
             'bert_config': self.bert_config.to_dict(),
             'model': self.model,
         }
 
-def create_fully_connected_model(is_training, token_embeddings, config=None, segment_ids=None):
+def create_fully_connected_model(is_training, token_embeddings, config, segment_ids):
     """Creates a classification model."""
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
     batch_size = input_shape[0]
@@ -37,6 +40,10 @@ def create_fully_connected_model(is_training, token_embeddings, config=None, seg
 
     output_bias = tf.get_variable(
         "cls/squad/output_bias", [2], initializer=tf.zeros_initializer())
+
+    
+    if config.mask_questions:
+        token_embeddings = mask_questions_batch(token_embeddings, segment_ids, hidden_size)
 
     final_hidden_matrix = tf.reshape(token_embeddings,
                                     [batch_size * seq_length, hidden_size])
