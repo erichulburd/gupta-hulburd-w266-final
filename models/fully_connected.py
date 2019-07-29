@@ -1,6 +1,6 @@
 import tensorflow as tf
 from bert.modeling import get_shape_list
-
+from utils import mask_questions_batch
 
 
 class FullyConnectedConfig:
