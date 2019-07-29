@@ -1,3 +1,4 @@
 {
-    "model": "fully_connected"
+    "model": "fully_connected",
+    "mask_questions": true
 }
