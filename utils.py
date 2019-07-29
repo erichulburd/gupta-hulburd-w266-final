@@ -9,7 +9,8 @@ def input_fn_builder(input_file,
                      is_training,
                      drop_remainder,
                      bert_config,
-                     fine_tune=False):
+                     fine_tune=False,
+                     is_test=False):
     """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
     name_to_features = {
@@ -17,9 +18,11 @@ def input_fn_builder(input_file,
         "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
         "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
         "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
-        "start_positions": tf.FixedLenFeature([], tf.int64),
-        "end_positions": tf.FixedLenFeature([], tf.int64)
     }
+    
+    if not is_test:
+        name_to_features["start_positions"] =  tf.FixedLenFeature([], tf.int64)
+        name_to_features["end_positions"] = tf.FixedLenFeature([], tf.int64)
 
     if not fine_tune:
         name_to_features['token_embeddings'] = tf.FixedLenSequenceFeature([],

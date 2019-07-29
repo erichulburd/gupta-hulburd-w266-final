@@ -181,6 +181,7 @@ class InputFeatures(object):
 
 def read_squad_examples(input_file, is_training, max_examples=None):
     """Read a SQuAD json file into a list of SquadExample."""
+
     with tf.gfile.Open(input_file, "r") as reader:
         input_data = json.load(reader)["data"]
 
@@ -223,6 +224,7 @@ def read_squad_examples(input_file, is_training, max_examples=None):
                             "For training, each question should have exactly 1 answer.")
                     if not is_impossible:
                         answer = qa["answers"][0]
+                        print(answer)
                         orig_answer_text = answer["text"]
                         answer_offset = answer["answer_start"]
                         answer_length = len(orig_answer_text)
@@ -520,8 +522,9 @@ class FeatureWriter(object):
         features["input_ids"] = create_int_feature(feature.input_ids)
         features["input_mask"] = create_int_feature(feature.input_mask)
         features["segment_ids"] = create_int_feature(feature.segment_ids)
-        features["start_positions"] = create_int_feature([feature.start_position])
-        features["end_positions"] = create_int_feature([feature.end_position])
+        if self.is_training:
+            features["start_positions"] = create_int_feature([feature.start_position])
+            features["end_positions"] = create_int_feature([feature.end_position])
         if token_embeddings is not None:
             features["token_embeddings"] = _flat_map_create_float_feature(token_embeddings)
 
@@ -572,15 +575,23 @@ def main(_):
         writer_fn = write_bert_embeddings
 
     if FLAGS.write_test:
-        writer_fn(TEST_FILE, False, [os.path.join(OUTPUT_DIR, "test.tf_record")], [1.0])
+        #writer_fn(TEST_FILE, False, [os.path.join(OUTPUT_DIR, "test.tf_record")], [1.0])
+        writer_fn = write_squad_features
+        splits = [1]
+        set_names = ['dev']
+        writer_fn(TEST_FILE, False, [
+                                     make_filename(set_name, split, OUTPUT_DIR, FLAGS.fine_tune, FLAGS.n_examples)
+                                     for set_name, split in zip(set_names, splits)
+                                     ], splits, FLAGS.n_examples)
 
-    splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
-    set_names = ['train', 'eval']
+    else:
+        splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
+        set_names = ['train', 'eval']
 
-    writer_fn(TRAIN_FILE, True, [
-        make_filename(set_name, split, OUTPUT_DIR, FLAGS.fine_tune, FLAGS.n_examples)
-        for set_name, split in zip(set_names, splits)
-    ], splits, FLAGS.n_examples)
+        writer_fn(TRAIN_FILE, True, [
+            make_filename(set_name, split, OUTPUT_DIR, FLAGS.fine_tune, FLAGS.n_examples)
+            for set_name, split in zip(set_names, splits)
+        ], splits, FLAGS.n_examples)
 
 
 def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu, use_one_hot_embeddings):
@@ -690,8 +701,9 @@ def _parse_squad_features(input_file: str,
                                    max_examples=max_examples)
     # Pre-shuffle the input to avoid having to make a very large shuffle
     # buffer in in the `input_fn`.
-    rng = random.Random(12345)
-    rng.shuffle(examples)
+    if not FLAGS.write_test:
+        rng = random.Random(12345)
+        rng.shuffle(examples)
     idx = 0
     assert sum(splits) == 1.0
     example_sets = []
