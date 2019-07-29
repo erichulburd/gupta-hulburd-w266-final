@@ -159,7 +159,7 @@ def model_fn_builder(bert_config,
 
     def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
         """The `model_fn` for TPUEstimator."""
-
+        
         tf.logging.info("*** Features ***")
         for name in sorted(features.keys()):
             tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
@@ -387,8 +387,7 @@ def main(_):
                           is_training=False,
                           is_test = True,
                           bert_config=bert_config,
-                          drop_remainder=False)
-                          
+                          drop_remainder=True)
         all_results = []
         
         # If running eval on the TPU, you will need to specify the number of
@@ -396,7 +395,7 @@ def main(_):
         all_results = []
         for result in estimator.predict(test_input_fn,
                         yield_single_examples=True):
-            print(result)
+  
             if len(all_results) % 1000 == 0:
                 tf.logging.info("Processing example: %d" % (len(all_results)))
             unique_id = int(result["unique_ids"])
