@@ -33,6 +33,11 @@ flags.DEFINE_string("output_dir", "out",
 flags.DEFINE_string("features_dir", "out/features",
                     "The output directory where the model checkpoints will be written.")
 
+flags.DEFINE_bool(
+    "verbose_logging", False,
+    "If true, all of the warnings related to data processing will be printed. "
+    "A number of warnings are expected for a normal SQuAD evaluation.")
+
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
 
 flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
