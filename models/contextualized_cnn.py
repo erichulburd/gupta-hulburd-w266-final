@@ -80,7 +80,7 @@ def apply_per_sample_conv1d(a, filters, n_filters, batch_size):
 
 def create_contextualized_cnn_model(is_training,
                                     token_embeddings,
-                                    config: ContextualizedCNNConfig,
+                                    config,
                                     batch_size,
                                     segment_ids=None,
                                     name="deconv_model"):

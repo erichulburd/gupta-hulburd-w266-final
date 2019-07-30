@@ -3,7 +3,6 @@ from bert.modeling import BertConfig, get_shape_list
 
 
 class CNNConfig:
-
     def __init__(self, filter_shapes, pool_shapes, channels_out, max_seq_length, bert_config,
                  model):
         self.filter_shapes = filter_shapes
@@ -22,6 +21,7 @@ class CNNConfig:
             'bert_config': self.bert_config.to_dict(),
             'model': self.model,
         }
+
 
 def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name="conv_layer"):
     seq_length = layer.shape[1]
@@ -54,7 +54,7 @@ def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name
     return out_layer
 
 
-def create_cnn_model(is_training, token_embeddings, config: CNNConfig, segment_ids=None,name="CNN"):
+def create_cnn_model(is_training, token_embeddings, config, segment_ids=None, name="CNN"):
     """Creates a classification model."""
 
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
