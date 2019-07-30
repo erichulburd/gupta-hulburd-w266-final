@@ -160,7 +160,7 @@ class SquadExample(object):
         return s
 
 
-def read_squad_examples(input_file, is_training, max_examples=None):
+def read_squad_examples(input_file, is_training, max_examples=None, writing_dev=False):
     """Read a SQuAD json file into a list of SquadExample."""
     with tf.gfile.Open(input_file, "r") as reader:
         input_data = json.load(reader)["data"]
@@ -198,7 +198,7 @@ def read_squad_examples(input_file, is_training, max_examples=None):
                 if is_training:
 
                     is_impossible = qa["is_impossible"]
-                    if (len(qa["answers"]) != 1) and (not is_impossible):
+                    if (len(qa["answers"]) != 1) and (not is_impossible) and not writing_dev:
                         raise ValueError(
                             "For training, each question should have exactly 1 answer.")
                     if not is_impossible:

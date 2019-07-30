@@ -137,7 +137,7 @@ def main(_):
     if FLAGS.write_dev:
         dev_filename = make_filename('dev', 1.0, FLAGS.output_dir, FLAGS.fine_tune,
                                      FLAGS.n_examples)
-        writer_fn(DEV_FILE, False, [dev_filename], [1.0], FLAGS.n_examples)
+        writer_fn(DEV_FILE, True, [dev_filename], [1.0], FLAGS.n_examples)
         return
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
@@ -244,16 +244,18 @@ def bert_input_fn_builder(features, seq_length):
     return input_fn
 
 
-def _parse_squad_features(input_file: str,
-                          is_training: bool,
-                          output_files: [str],
-                          splits: [int],
-                          max_examples: int = None):
+def _parse_squad_features(input_file,
+                          is_training,
+                          output_files,
+                          splits,
+                          writing_dev=False,
+                          max_examples=None):
 
     # STEP 1: Tokenize inputs
     examples = read_squad_examples(input_file=input_file,
                                    is_training=is_training,
-                                   max_examples=max_examples)
+                                   max_examples=max_examples,
+                                   writing_dev=writing_dev)
     # Pre-shuffle the input to avoid having to make a very large shuffle
     # buffer in in the `input_fn`.
     rng = random.Random(12345)
@@ -280,13 +282,14 @@ def _parse_squad_features(input_file: str,
                                             is_training=is_training))
 
 
-def write_squad_features(input_file: str,
-                         is_training: bool,
-                         output_files: [str],
-                         splits: [int],
-                         max_examples: int = None):
+def write_squad_features(input_file,
+                         is_training,
+                         output_files,
+                         splits,
+                         writing_dev=False,
+                         max_examples=None):
     for output_file, features in _parse_squad_features(input_file, is_training, output_files,
-                                                       splits, max_examples):
+                                                       splits, max_examples, writing_dev):
 
         writer = FeatureWriter(filename=output_file, is_training=is_training)
         for i, feature in enumerate(features):
@@ -298,15 +301,16 @@ def write_squad_features(input_file: str,
         writer.close()
 
 
-def write_bert_embeddings(input_file: str,
-                          is_training: bool,
-                          output_files: [str],
-                          splits: [int],
-                          max_examples: int = None):
+def write_bert_embeddings(input_file,
+                          is_training,
+                          output_files,
+                          splits,
+                          writing_dev=False,
+                          max_examples=None):
     bert_config = modeling.BertConfig.from_json_file(BERT_CONFIG_FILE)
 
     for output_file, features in _parse_squad_features(input_file, is_training, output_files,
-                                                       splits, max_examples):
+                                                       splits, max_examples, writing_dev):
         unique_id_to_feature = {}
         feature_list = []
         for feature in features:
