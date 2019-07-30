@@ -137,7 +137,7 @@ def main(_):
     if FLAGS.write_dev:
         dev_filename = make_filename('dev', 1.0, FLAGS.output_dir, FLAGS.fine_tune,
                                      FLAGS.n_examples)
-        writer_fn(DEV_FILE, True, [dev_filename], [1.0], FLAGS.n_examples)
+        writer_fn(DEV_FILE, False, [dev_filename], [1.0], FLAGS.n_examples)
         return
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
