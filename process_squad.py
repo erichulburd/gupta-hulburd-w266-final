@@ -139,8 +139,8 @@ def main(_):
                                      FLAGS.n_examples)
         writer_fn(DEV_FILE,
                   True, [dev_filename], [1.0],
-                  FLAGS.n_examples,
-                  writing_dev=FLAGS.write_dev)
+                  writing_dev=FLAGS.write_dev,
+                  max_examples=FLAGS.n_examples)
         return
 
     splits = [1. - FLAGS.eval_percent, FLAGS.eval_percent]
