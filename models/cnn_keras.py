@@ -75,11 +75,7 @@ def apply_conv_layers(is_training, token_embeddings, config, dropout_rate=0.2, n
     return tf.keras.layers.Dropout(rate=dropout_rate)(conv)
 
 
-def create_cnnKeras_model(is_training,
-                          token_embeddings,
-                          config: CNNKerasConfig,
-                          segment_ids=None,
-                          name="CNN"):
+def create_cnnKeras_model(is_training, token_embeddings, config, segment_ids=None, name="CNN"):
     """Creates a classification model."""
     ############################ Layer 1 of CNNs ##############################
     conv1 = apply_conv_layers(is_training, token_embeddings, config, segment_ids, name)
