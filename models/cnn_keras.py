@@ -52,11 +52,7 @@ def _conv_layer(layer, filter_shape, channels_in, pool_shape, channels_out, name
     return out_layer
 
 
-def apply_conv_layers(is_training,
-                      token_embeddings,
-                      config: CNNKerasConfig,
-                      dropout_rate=0.2,
-                      name="CNN"):
+def apply_conv_layers(is_training, token_embeddings, config, dropout_rate=0.2, name="CNN"):
     dropout_rate = 0.2
     channels_in = 1  # Only one channel in input since we are doing NLP
 
