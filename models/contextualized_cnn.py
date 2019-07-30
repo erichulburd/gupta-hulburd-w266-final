@@ -51,15 +51,16 @@ class ContextualizedCNNConfig:
         }
 
 
-def apply_per_sample_conv1d(a, filters, n_filters):
-    batch_size = a.shape[0].value
-    seq_length = a.shape[1].value
-    channels_in = a.shape[2].value
+def apply_per_sample_conv1d(a, filters, n_filters, batch_size):
+    input_shape = get_shape_list(a, expected_rank=3)
+    # batch_size = 32  # NOTE: must do this for prediction input_shape[0]
+    seq_length = input_shape[1]
+    channels_in = input_shape[2]
 
     a = tf.transpose(a, [1, 0, 2])
     a = tf.reshape(a, [1, seq_length, 1, batch_size * channels_in])
 
-    assert filters.shape[0].value == batch_size
+    # assert filters.shape[0].value == batch_size
     filter_length = filters.shape[1].value
     assert filter_length <= seq_length
     assert filters.shape[2].value == channels_in * n_filters
@@ -80,6 +81,7 @@ def apply_per_sample_conv1d(a, filters, n_filters):
 def create_contextualized_cnn_model(is_training,
                                     token_embeddings,
                                     config: ContextualizedCNNConfig,
+                                    batch_size,
                                     segment_ids=None,
                                     name="deconv_model"):
     """
@@ -88,9 +90,10 @@ def create_contextualized_cnn_model(is_training,
     or perhaps even implement this ourselves.
     https://arxiv.org/pdf/1603.07285.pdf
     """
+    print('batch_size: %d' % batch_size)
 
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
-    batch_size = input_shape[0]
+    # batch_size = 32  # NOTE: must do this for prediction input_shape[0]
     seq_length = input_shape[1]
 
     channels_in = 1
@@ -105,7 +108,8 @@ def create_contextualized_cnn_model(is_training,
             name='contextualized_cnn/downsizer',
         )
 
-    assert downsized_input.shape[0].value == batch_size
+    # This does not work during prediction
+    # assert downsized_input.shape[0].value == batch_size
     assert downsized_input.shape[1].value == seq_length
     downsized_channels_out = downsized_input.shape[-1].value
 
@@ -119,11 +123,11 @@ def create_contextualized_cnn_model(is_training,
                                 name='contextualized_cnn/filter_generator',
                                 dropout_rate=0.)
 
-    assert filters.shape[0].value == batch_size
+    # This does not work during prediction
+    # assert filters.shape[0].value == batch_size
     assert filters.shape[1].value == seq_length
     n_filters = int(filters.shape[2].value / downsized_channels_out)
     assert (n_filters % 2) == 0
-
 
     filter_generator_pooling = config.filter_generator_pooling
     pooling_size = [filter_generator_pooling['size'], 1, 1]
@@ -133,11 +137,12 @@ def create_contextualized_cnn_model(is_training,
     elif config.filter_generator_pooling['type'] == 'avg':
         filters = tf.nn.avg_pool1d(filters, pooling_size, pooling_strides, 'VALID')
 
-    contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters)
+    contextualized = apply_per_sample_conv1d(paragraphs, filters, n_filters, batch_size)
 
     (start_features, end_features) = tf.split(contextualized, 2, axis=2)
 
-    feature_channels_out = int(n_filters/2.)
+    feature_channels_out = int(n_filters / 2.)
+
     def compute_logits(features):
         wd1 = tf.Variable(tf.truncated_normal([feature_channels_out, 1], stddev=0.03), name='wd1')
         bd1 = tf.Variable(tf.truncated_normal([1], stddev=0.01), name='bd1')
