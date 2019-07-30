@@ -121,7 +121,9 @@ BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
 OUTPUT_DIR = FLAGS.output_dir + "/" + datetime.now().isoformat()
 
 INIT_CHECKPOINT = None
-if FLAGS.init_checkpoint is not None:
+if FLAGS.fine_tune:
+    INIT_CHECKPOINT = '%s/bert_model.ckpt' % DATA_BERT_DIRECTORY
+elif FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
