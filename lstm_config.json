@@ -1,4 +1,4 @@
 {
     "model": "lstm",
-    "num_units": 128
+    "num_units": 128 
 }

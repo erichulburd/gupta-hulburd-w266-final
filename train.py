@@ -100,7 +100,7 @@ OUTPUT_DIR = FLAGS.output_dir + "/" + datetime.now().isoformat()
 
 INIT_CHECKPOINT = None
 if FLAGS.init_checkpoint is not None:
-    INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
+    INIT_CHECKPOINT = '%s' % (FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
 TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.features_dir,
