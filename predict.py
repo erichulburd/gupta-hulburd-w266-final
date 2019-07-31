@@ -420,10 +420,10 @@ def main(_):
                                             predict_batch_size=FLAGS.predict_batch_size)
 
     eval_examples = None
-    with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'rb') as out_file:
+    with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.features_dir, 'rb') as out_file:
         eval_examples = pickle.load(out_file)
     eval_features = None
-    with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'rb') as out_file:
+    with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.features_dir, 'rb') as out_file:
         eval_features = pickle.load(out_file)
 
     tf.logging.info("***** Running predictions *****")
