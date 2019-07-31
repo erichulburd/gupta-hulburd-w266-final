@@ -324,17 +324,17 @@ def write_bert_embeddings(input_file,
                                                                  output_files, splits, writing_dev,
                                                                  max_examples):
 
-        if writing_dev:
-            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
-                pickle.dump(examples, out_file)
-            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
-                pickle.dump([feature for feature in features], out_file)
-
         unique_id_to_feature = {}
         feature_list = []
         for feature in features:
             unique_id_to_feature[feature.unique_id] = feature
             feature_list.append(feature)
+
+        if writing_dev:
+            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(examples, out_file)
+            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(feature_list, out_file)
 
         # STEP 2: initialize BERT model to extract token embeddings.
         layer_indexes = [-1]
@@ -375,7 +375,7 @@ def write_bert_embeddings(input_file,
             writer.process_feature(feature, result["sequence_output"])
 
             if ct % 1000 == 0:
-                print('%d examples processed', ct)
+                print('%d examples processed' % ct)
 
         writer.close()
 
