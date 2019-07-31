@@ -30,6 +30,8 @@ flags.DEFINE_string("squad_json", None, 'Raw squad JSON file')
 
 flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
+flags.DEFINE_string("predictions_output_directory", None,
+                    "The output directory where prediction json will be written.")
 flags.DEFINE_string("features_dir", "out/features",
                     "The output directory where the model checkpoints will be written.")
 

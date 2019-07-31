@@ -474,9 +474,12 @@ def main(_):
             all_results.append(
                 RawResult(unique_id=unique_id, start_logits=start_logits, end_logits=end_logits))
 
-    output_prediction_file = os.path.join(FLAGS.output_dir, "predictions.json")
-    output_nbest_file = os.path.join(FLAGS.output_dir, "nbest_predictions.json")
-    output_null_log_odds_file = os.path.join(FLAGS.output_dir, "null_odds.json")
+    output_prediction_file = os.path.join(FLAGS.output_dir, FLAGS.predictions_output_directory,
+                                          "predictions.json")
+    output_nbest_file = os.path.join(FLAGS.output_dir, FLAGS.predictions_output_directory,
+                                     "nbest_predictions.json")
+    output_null_log_odds_file = os.path.join(FLAGS.output_dir, FLAGS.predictions_output_directory,
+                                             "null_odds.json")
 
     write_predictions(eval_examples, eval_features, all_results, FLAGS.n_best_size,
                       FLAGS.max_answer_length, FLAGS.do_lower_case, output_prediction_file,
