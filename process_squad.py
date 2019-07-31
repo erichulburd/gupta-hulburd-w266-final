@@ -331,9 +331,14 @@ def write_bert_embeddings(input_file,
             feature_list.append(feature)
 
         if writing_dev:
-            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+            suffix = ''
+            if FLAGS.fine_tune:
+                suffix = '_fine_tune'
+            with tf.gfile.GFile('%s/dev_examples%s.pickle' % (FLAGS.output_dir, suffix),
+                                'wb') as out_file:
                 pickle.dump(examples, out_file)
-            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+            with tf.gfile.GFile('%s/dev_features%s.pickle' % (FLAGS.output_dir, suffix),
+                                'wb') as out_file:
                 pickle.dump(feature_list, out_file)
 
         # STEP 2: initialize BERT model to extract token embeddings.
