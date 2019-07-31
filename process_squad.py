@@ -328,7 +328,7 @@ def write_bert_embeddings(input_file,
             with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
                 pickle.dump(examples, out_file)
             with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
-                pickle.dump(features, out_file)
+                pickle.dump([feature for feature in features], out_file)
 
         unique_id_to_feature = {}
         feature_list = []
