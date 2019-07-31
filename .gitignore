@@ -3,5 +3,6 @@ env/
 tmp/
 data/
 out/
+archive/
 .DS_store
 

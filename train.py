@@ -137,8 +137,8 @@ TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.featu
 EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.features_dir, FLAGS.fine_tune,
                                N_TRAIN_EXAMPLES)
 
-tf.gfile.MakeDirs(OUTPUT_DIR)
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
+
 N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
@@ -331,6 +331,8 @@ def model_fn_builder(bert_config,
 
 
 def main(_):
+    tf.gfile.MakeDirs(OUTPUT_DIR)
+
     tf.logging.set_verbosity(tf.logging.INFO)
 
     (config, create_model) = load_and_save_config(FLAGS.config)
