@@ -215,6 +215,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
     all_nbest_json = collections.OrderedDict()
     scores_diff_json = collections.OrderedDict()
 
+    total_no_prediction = 0
     for (example_index, example) in enumerate(all_examples):
         features = example_index_to_features[example_index]
 
@@ -335,12 +336,14 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                 if entry.text:
                     best_non_null_entry = entry
         if best_non_null_entry is None:
+            best_non_null_entry = nbest[0]
             print('==== NOPE ====')
             print(example.question_text)
             print(example.doc_tokens)
             print(example.orig_answer_text)
             print([(entry.text, entry.start_logit, entry.end_logit) for entry in nbest])
-            raise Exception('Best none null cannot be empty.')
+            total_no_prediction += 1
+            # raise Exception('Best none null cannot be empty.')
 
         probs = _compute_softmax(total_scores)
 
@@ -368,6 +371,10 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                 all_predictions[example.qas_id] = best_non_null_entry.text
 
         all_nbest_json[example.qas_id] = nbest_json
+
+    print('============================================================')
+    print('================+= total no prediction %d ==================' % total_no_prediction)
+    print('============================================================')
 
     with tf.gfile.GFile(output_prediction_file, "w") as writer:
         writer.write(json.dumps(all_predictions, indent=4) + "\n")
