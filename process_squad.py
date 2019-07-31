@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import random
 import math
+import pickle
 
 from bert import modeling, tokenization
 import tensorflow as tf
@@ -276,7 +277,7 @@ def _parse_squad_features(input_file,
         tokenizer = tokenization.FullTokenizer(vocab_file=VOCAB_FILE,
                                                do_lower_case=FLAGS.do_lower_case)
 
-        yield (output_file,
+        yield (output_file, example_set,
                convert_examples_to_features(examples=example_set,
                                             tokenizer=tokenizer,
                                             max_seq_length=FLAGS.max_seq_length,
@@ -291,8 +292,15 @@ def write_squad_features(input_file,
                          splits,
                          writing_dev=False,
                          max_examples=None):
-    for output_file, features in _parse_squad_features(input_file, is_training, output_files,
-                                                       splits, writing_dev, max_examples):
+    for output_file, examples, features in _parse_squad_features(input_file, is_training,
+                                                                 output_files, splits, writing_dev,
+                                                                 max_examples):
+
+        if writing_dev:
+            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(examples, out_file)
+            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(features, out_file)
 
         writer = FeatureWriter(filename=output_file, is_training=is_training)
         for i, feature in enumerate(features):
@@ -312,8 +320,16 @@ def write_bert_embeddings(input_file,
                           max_examples=None):
     bert_config = modeling.BertConfig.from_json_file(BERT_CONFIG_FILE)
 
-    for output_file, features in _parse_squad_features(input_file, is_training, output_files,
-                                                       splits, writing_dev, max_examples):
+    for output_file, examples, features in _parse_squad_features(input_file, is_training,
+                                                                 output_files, splits, writing_dev,
+                                                                 max_examples):
+
+        if writing_dev:
+            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(examples, out_file)
+            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+                pickle.dump(features, out_file)
+
         unique_id_to_feature = {}
         feature_list = []
         for feature in features:

@@ -3,6 +3,7 @@ import os
 import six
 import math
 import collections
+import pickle
 import json
 from bert import tokenization
 from bert.modeling import BertConfig
@@ -14,63 +15,6 @@ from models.cnn import CNNConfig, create_cnn_model
 from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_contextualized_cnn_model, ContextualizedCNNConfig
 from models.fully_connected import create_fully_connected_model, FullyConnectedConfig
-"""
-##### TPU flags #####
-
-flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
-
-tf.flags.DEFINE_string(
-    "tpu_name", None, "The Cloud TPU to use for training. This should be either the name "
-    "used when creating the Cloud TPU, or a grpc://ip.address.of.tpu:8470 "
-    "url.")
-
-tf.flags.DEFINE_string(
-    "tpu_zone", None, "[Optional] GCE zone where the Cloud TPU is located in. If not "
-    "specified, we will attempt to automatically detect the GCE project from "
-    "metadata.")
-
-tf.flags.DEFINE_string(
-    "gcp_project", None, "[Optional] Project name for the Cloud TPU-enabled project. If not "
-    "specified, we will attempt to automatically detect the GCE project from "
-    "metadata.")
-
-tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
-
-flags.DEFINE_integer("num_tpu_cores", 8,
-                     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
-
-##### Train flags () #####
-
-flags.DEFINE_float(
-    "warmup_proportion", 0.1, "Proportion of training to perform linear learning rate warmup for. "
-    "E.g., 0.1 = 10% of training.")
-flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
-flags.DEFINE_float("num_train_epochs", 20, "Total number of training epochs to perform.")
-flags.DEFINE_integer("save_checkpoints_steps", 1000, "How often to save the model checkpoint.")
-flags.DEFINE_integer("iterations_per_loop", 1000, "How many steps to make in each estimator call.")
-flags.DEFINE_integer("eval_start_delay_secs", 120, "How many steps to make in each estimator call.")
-flags.DEFINE_integer("eval_throttle_secs", 450, "How many steps to make in each estimator call.")
-flags.DEFINE_integer("eval_batch_size", 128, "Total batch size for prediction.")
-flags.DEFINE_integer("eval_steps", 20, "Number eval batches")
-
-##### Predict flags #####
-
-flags.DEFINE_integer("max_seq_length", MAX_SEQ_LENGTH, "The maximum total input sequence"
-                     "length after WordPiece tokenization.")
-
-flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
-                    'directory containing BERT config and checkpoints')
-
-flags.DEFINE_string("output_dir", None, "The model directory with checkpoints.")
-flags.DEFINE_string("init_checkpoint", None, 'Option to specify a specific checkpoint.')
-
-flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for prediction.")
-
-tf.flags.DEFINE_bool("fine_tune", False,
-                     "Whether to fine tune bert embeddings or take input as features.")
-tf.flags.DEFINE_bool("do_lower_case", True, "Bert embeddings are lower cased.")
-flags.DEFINE_integer("n_examples", None, "Name of tf_record file to use for input")
-"""
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
@@ -80,7 +24,6 @@ INIT_CHECKPOINT = FLAGS.output_dir
 if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (FLAGS.output_dir, FLAGS.init_checkpoint)
 
-N_TOTAL_SQUAD_EXAMPLES = 130319
 DEV_FILENAME = make_filename('dev', 1., FLAGS.features_dir, FLAGS.fine_tune, FLAGS.n_examples)
 
 RawResult = collections.namedtuple("RawResult", ["unique_id", "start_logits", "end_logits"])
@@ -388,11 +331,16 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
         best_non_null_entry = None
         for entry in nbest:
             total_scores.append(entry.start_logit + entry.end_logit)
-            if not best_non_null_entry:
+            if best_non_null_entry is None and entry.text:
                 if entry.text:
                     best_non_null_entry = entry
         if best_non_null_entry is None:
-            best_non_null_entry = _NbestPrediction(text="empty", start_logit=0.0, end_logit=0.0)
+            print('==== NOPE ====')
+            print(example.question_text)
+            print(example.doc_tokens)
+            print(example.orig_answer_text)
+            print([(entry.text, entry.start_logit, entry.end_logit) for entry in nbest])
+            raise Exception('Best none null cannot be empty.')
 
         probs = _compute_softmax(total_scores)
 
@@ -471,22 +419,12 @@ def main(_):
                                             config=run_config,
                                             predict_batch_size=FLAGS.predict_batch_size)
 
-    eval_examples = read_squad_examples(input_file=FLAGS.squad_json,
-                                        is_training=False,
-                                        max_examples=FLAGS.n_examples)
-
-    eval_features = []
-
-    tokenizer = tokenization.FullTokenizer(vocab_file='%s/vocab.txt' % DATA_BERT_DIRECTORY,
-                                           do_lower_case=FLAGS.do_lower_case)
-    features = convert_examples_to_features(examples=eval_examples,
-                                            tokenizer=tokenizer,
-                                            max_seq_length=FLAGS.max_seq_length,
-                                            doc_stride=FLAGS.doc_stride,
-                                            max_query_length=FLAGS.max_query_length,
-                                            is_training=False)
-    for feature in features:
-        eval_features.append(feature)
+    eval_examples = None
+    with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+        eval_examples = pickle.load(out_file)
+    eval_features = None
+    with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+        eval_features = pickle.load(out_file)
 
     tf.logging.info("***** Running predictions *****")
     tf.logging.info("  Num orig examples = %d", len(eval_examples))
