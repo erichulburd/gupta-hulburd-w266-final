@@ -54,11 +54,16 @@ def _conv_layer(layer, filter_shape, pool_shape, channels_in, channels_out, name
     return out_layer
 
 
-def create_cnn_model(is_training, token_embeddings, config, segment_ids=None, name="CNN"):
+def create_cnn_model(is_training,
+                     token_embeddings,
+                     config,
+                     batch_size,
+                     segment_ids=None,
+                     name="CNN"):
     """Creates a classification model."""
 
     input_shape = get_shape_list(token_embeddings, expected_rank=3)
-    batch_size = input_shape[0]
+    # batch_size = input_shape[0]
     seq_length = input_shape[1]
     hidden_size = input_shape[2]
 
