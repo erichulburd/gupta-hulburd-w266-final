@@ -11,14 +11,13 @@ from models.rnn_lstm import create_rnn_lstm_model, LSTMConfig
 from models.cnn import CNNConfig, create_cnn_model
 from models.cnn_keras import CNNKerasConfig, create_cnnKeras_model
 from models.contextualized_cnn import create_contextualized_cnn_model, ContextualizedCNNConfig
+from models.fully_connected import create_fully_connected_model, FullyConnectedConfig
 from utils import make_filename
 import time
 
 flags = tf.flags
 
 FLAGS = flags.FLAGS
-
-flags.DEFINE_integer("num_train_examples", 1000, "The number of training examples to train")
 
 flags.DEFINE_integer("max_seq_length", MAX_SEQ_LENGTH, "The maximum total input sequence"
                      "length after WordPiece tokenization.")
@@ -27,13 +26,21 @@ flags.DEFINE_string("data_bert_directory", 'data/uncased_L-12_H-768_A-12',
                     'directory containing BERT config and checkpoints')
 
 flags.DEFINE_string("init_checkpoint", None, '')
+flags.DEFINE_string("squad_json", None, 'Raw squad JSON file')
 
 flags.DEFINE_string("output_dir", "out",
                     "The output directory where the model checkpoints will be written.")
+flags.DEFINE_string("predictions_output_directory", None,
+                    "The output directory where prediction json will be written.")
+flags.DEFINE_string("features_dir", "out/features",
+                    "The output directory where the model checkpoints will be written.")
+
+flags.DEFINE_bool(
+    "verbose_logging", False,
+    "If true, all of the warnings related to data processing will be printed. "
+    "A number of warnings are expected for a normal SQuAD evaluation.")
 
 flags.DEFINE_bool("do_train", True, "Whether to run training.")
-
-flags.DEFINE_bool("do_predict", False, "Whether to run eval on the dev set.")
 
 flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
 
@@ -41,7 +48,22 @@ flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
 flags.DEFINE_float("num_train_epochs", 20, "Total number of training epochs to perform.")
 
-flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for prediction.")
+flags.DEFINE_integer("predict_batch_size", 1, "Total batch size for prediction.")
+
+flags.DEFINE_integer(
+    "n_best_size", 20, "The total number of n-best predictions to generate in the "
+    "nbest_predictions.json output file.")
+
+flags.DEFINE_integer(
+    "max_answer_length", 30,
+    "The maximum length of an answer that can be generated. This is needed "
+    "because the start and end predictions are not conditioned on one another.")
+
+flags.DEFINE_bool("version_2_with_negative", True,
+                  "If true, the SQuAD examples contain some that do not have an answer.")
+
+flags.DEFINE_float("null_score_diff_threshold", 0.0,
+                   "If null_score - best_non_null is greater than the threshold predict null.")
 
 flags.DEFINE_float(
     "warmup_proportion", 0.1, "Proportion of training to perform linear learning rate warmup for. "
@@ -88,7 +110,17 @@ flags.DEFINE_float("eval_percent", 0.1,
 
 flags.DEFINE_string("tf_record", "train", "Name of tf_record file to use for input")
 
+flags.DEFINE_integer(
+    "doc_stride", 128, "When splitting up a long document into chunks, how much stride to "
+    "take between chunks.")
+
+flags.DEFINE_integer(
+    "max_query_length", 64, "The maximum number of tokens for the question. Questions longer than "
+    "this will be truncated to this length.")
+
 flags.DEFINE_string("config", "config.json", "JSON file with model configuration.")
+
+tf.flags.DEFINE_bool("do_lower_case", True, "Bert embeddings are lower cased.")
 
 DATA_BERT_DIRECTORY = FLAGS.data_bert_directory
 BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
@@ -96,21 +128,23 @@ BERT_CONFIG_FILE = "%s/bert_config.json" % DATA_BERT_DIRECTORY
 OUTPUT_DIR = FLAGS.output_dir + "/" + datetime.now().isoformat()
 
 INIT_CHECKPOINT = None
-if FLAGS.init_checkpoint is not None:
+if FLAGS.fine_tune:
+    INIT_CHECKPOINT = '%s/bert_model.ckpt' % DATA_BERT_DIRECTORY
+elif FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (OUTPUT_DIR, FLAGS.init_checkpoint)
 
 N_TRAIN_EXAMPLES = FLAGS.n_examples
-TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.output_dir + '/features',
+TRAIN_FILE_NAME = make_filename('train', (1.0 - FLAGS.eval_percent), FLAGS.features_dir,
                                 FLAGS.fine_tune, N_TRAIN_EXAMPLES)
-EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.output_dir + '/features',
-                               FLAGS.fine_tune, N_TRAIN_EXAMPLES)
+EVAL_FILE_NAME = make_filename('eval', (FLAGS.eval_percent), FLAGS.features_dir, FLAGS.fine_tune,
+                               N_TRAIN_EXAMPLES)
 
-tf.gfile.MakeDirs(OUTPUT_DIR)
 bert_config = BertConfig.from_json_file(BERT_CONFIG_FILE)
+
 N_TOTAL_SQUAD_EXAMPLES = 130319
 
 
-def load_and_save_config(filename: str):
+def load_and_save_config(filename):
     with tf.gfile.GFile(filename, 'r') as json_data:
         parsed = json.load(json_data)
         parsed['max_seq_length'] = FLAGS.max_seq_length
@@ -134,13 +168,13 @@ def load_and_save_config(filename: str):
         elif parsed['model'] == 'contextualized_cnn':
             config_class = ContextualizedCNNConfig
             create_model = create_contextualized_cnn_model
+        elif parsed['model'] == 'fully_connected':
+            config_class = FullyConnectedConfig
+            create_model = create_fully_connected_model
         else:
             raise ValueError('No supported model %s' % parsed['model'])
 
         return (config_class(**parsed), create_model)
-
-
-(config, create_model) = load_and_save_config(FLAGS.config)
 
 
 def model_fn_builder(bert_config,
@@ -150,6 +184,7 @@ def model_fn_builder(bert_config,
                      num_warmup_steps,
                      use_tpu,
                      config,
+                     create_model_fn,
                      fine_tune=False):
     """Returns `model_fn` closure for TPUEstimator."""
 
@@ -180,10 +215,11 @@ def model_fn_builder(bert_config,
         else:
             token_embeddings = features["token_embeddings"]
 
-        (start_logits, end_logits) = create_model(is_training,
-                                                  token_embeddings,
-                                                  config,
-                                                  segment_ids=segment_ids)
+        (start_logits, end_logits) = create_model_fn(is_training,
+                                                     token_embeddings,
+                                                     config,
+                                                     params['batch_size'],
+                                                     segment_ids=segment_ids)
         tvars = tf.trainable_variables()
 
         initialized_variable_names = {}
@@ -199,7 +235,9 @@ def model_fn_builder(bert_config,
 
                 scaffold_fn = tpu_scaffold
             else:
-                tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
+                print('assignment_map')
+                print(assignment_map)
+                tf.train.init_from_checkpoint(init_checkpoint, {})
 
         tf.logging.info("**** Trainable Variables ****")
         for var in tvars:
@@ -218,20 +256,21 @@ def model_fn_builder(bert_config,
             loss = -tf.reduce_mean(tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
             return loss
 
-        start_positions = features["start_positions"]
-        end_positions = features["end_positions"]
+        if mode != tf.estimator.ModeKeys.PREDICT:
+            start_positions = features["start_positions"]
+            end_positions = features["end_positions"]
 
-        start_loss = compute_loss(start_logits, start_positions)
-        end_loss = compute_loss(end_logits, end_positions)
+            start_loss = compute_loss(start_logits, start_positions)
+            end_loss = compute_loss(end_logits, end_positions)
 
-        total_loss = (start_loss + end_loss) / 2.0
+            total_loss = (start_loss + end_loss) / 2.0
 
-        start_accuracy = compute_batch_accuracy(start_logits, start_positions)
-        end_accuracy = compute_batch_accuracy(end_logits, end_positions)
-        start_weighted5_accuracy = compute_weighted_batch_accuracy(start_logits,
-                                                                   start_positions,
-                                                                   k=5)
-        end_weighted5_accuracy = compute_weighted_batch_accuracy(end_logits, end_positions, k=5)
+            start_accuracy = compute_batch_accuracy(start_logits, start_positions)
+            end_accuracy = compute_batch_accuracy(end_logits, end_positions)
+            start_weighted5_accuracy = compute_weighted_batch_accuracy(start_logits,
+                                                                       start_positions,
+                                                                       k=5)
+            end_weighted5_accuracy = compute_weighted_batch_accuracy(end_logits, end_positions, k=5)
 
         def write_summaries(family):
             tf.summary.scalar("start_loss", start_loss, family=family)
@@ -254,7 +293,7 @@ def model_fn_builder(bert_config,
             summaries = tf.train.SummarySaverHook(
                 save_steps=1,
                 output_dir=OUTPUT_DIR,
-                summary_op=tf.compat.v1.summary.merge_all(),
+                summary_op=tf.summary.merge_all(),
             )
             output_spec = tf.contrib.tpu.TPUEstimatorSpec(mode=mode,
                                                           loss=total_loss,
@@ -266,7 +305,7 @@ def model_fn_builder(bert_config,
             summaries = tf.train.SummarySaverHook(
                 save_steps=1,
                 output_dir=OUTPUT_DIR,
-                summary_op=tf.compat.v1.summary.merge_all(),
+                summary_op=tf.summary.merge_all(),
             )
             predictions = {}
 
@@ -294,7 +333,11 @@ def model_fn_builder(bert_config,
 
 
 def main(_):
+    tf.gfile.MakeDirs(OUTPUT_DIR)
+
     tf.logging.set_verbosity(tf.logging.INFO)
+
+    (config, create_model) = load_and_save_config(FLAGS.config)
 
     tpu_cluster_resolver = None
     if FLAGS.use_tpu and FLAGS.tpu_name:
@@ -332,6 +375,7 @@ def main(_):
                                 num_warmup_steps=num_warmup_steps,
                                 config=config,
                                 use_tpu=FLAGS.use_tpu,
+                                create_model_fn=create_model,
                                 fine_tune=FLAGS.fine_tune)
 
     # If TPU is not available, this will fall back to normal Estimator on CPU

@@ -7,8 +7,20 @@
 - [X] Attempt create context aware bidirectional CNN
 - [X] Add a training hook (`tf.train.SessionRunHook`) to get the accuracy on an evaluation set.
 - [ ] Explore limited hyperparameter spaces:
-    - [ ] CNN
-    - [ ] LSTM
-    - [ ] Fully connected
-    - [ ] Contextualized CNN
-- [ ]
+    - [X] CNN
+    - [X] LSTM
+    - [X] Fully connected
+    - [X] Contextualized CNN
+- [ ] Set up prediction loop for dev evaluation (this should support the error analysis) (Eric)
+- [ ] Create a visual for the centextualized CNN (Eric)
+- [ ] Write report
+  - [ ] intro to BERT and Squad problem (Suhas) 
+  - [ ] motivation of experiments (Suhas/Eric)
+  - [ ] intro to additional layers (Eric Contextualized CNN, Suhas remainder)
+  - [ ] table and chart results (Suhas)
+  - [ ] results write up (Suhas/Eric)
+  - [ ] error analysis 
+  - [ ] conclusion, opportunities for additional study (Suhas/Eric)
+  - [ ] Appendix 1 - code explanation/ navigation
+- [ ] Format report into requested "professional" format (TBD)
+
