@@ -268,7 +268,7 @@ def _parse_squad_features(input_file,
     assert sum(splits) == 1.0
     example_sets = []
     for split in splits:
-        next_idx = idx + math.ceil(split * len(examples))
+        next_idx = int(idx + math.ceil(split * len(examples)))
         print('idx, next_idx')
         print(idx, next_idx)
         example_sets.append(examples[idx:next_idx])
