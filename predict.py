@@ -34,7 +34,6 @@ def load_and_save_config(filename):
     with tf.gfile.GFile(filename, 'r') as json_data:
         parsed = json.load(json_data)
         parsed['max_seq_length'] = FLAGS.max_seq_length
-        parsed['bert_config'] = bert_config.to_dict()
         parsed['bert_config'] = bert_config
 
         create_model = None

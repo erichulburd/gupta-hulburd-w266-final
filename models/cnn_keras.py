@@ -82,11 +82,18 @@ def create_cnnKeras_model(is_training,
                           segment_ids=None,
                           name="CNN"):
     """Creates a classification model."""
+    print('token_embeddings.shape')
+    print(token_embeddings.shape)
     ############################ Layer 1 of CNNs ##############################
     conv1 = apply_conv_layers(is_training, token_embeddings, config, segment_ids, name)
 
+    print('conv1.shape')
+    print(conv1.shape)
+
     ############################ Layer 2 of CNNs ##############################
     conv2 = apply_conv_layers(is_training, conv1, config, segment_ids, name)
+    print('conv2.shape')
+    print(conv2.shape)
 
     ############################ Fully Connected ##############################
     n_positions = 2  # start and end logits
