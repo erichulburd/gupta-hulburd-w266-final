@@ -298,6 +298,10 @@ def write_squad_features(input_file,
                                                                  output_files, splits, writing_dev,
                                                                  max_examples):
 
+        feature_list = []
+        for feature in features:
+            feature_list.append(feature)
+
         suffix = ''
         if FLAGS.fine_tune:
             suffix = '_fine_tune'
@@ -308,10 +312,10 @@ def write_squad_features(input_file,
                 pickle.dump(examples, out_file)
             with tf.gfile.GFile('%s/dev_features%s.pickle' % (FLAGS.output_dir, suffix),
                                 'wb') as out_file:
-                pickle.dump(features, out_file)
+                pickle.dump(feature_list, out_file)
 
         writer = FeatureWriter(filename=output_file, is_training=is_training)
-        for i, feature in enumerate(features):
+        for i, feature in enumerate(feature_list):
             writer.process_feature(feature)
 
             if i % 1000 == 0:
