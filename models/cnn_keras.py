@@ -85,19 +85,19 @@ def create_cnnKeras_model(is_training,
     print('token_embeddings.shape')
     print(token_embeddings.shape)
     ############################ Layer 1 of CNNs ##############################
-    conv1 = apply_conv_layers(is_training, token_embeddings, config, segment_ids, name)
+    conv = apply_conv_layers(is_training, token_embeddings, config, segment_ids, name)
 
     print('conv1.shape')
-    print(conv1.shape)
+    print(conv.shape)
 
     ############################ Layer 2 of CNNs ##############################
-    conv2 = apply_conv_layers(is_training, conv1, config, segment_ids, name)
+    # conv = apply_conv_layers(is_training, conv, config, segment_ids, name)
     print('conv2.shape')
-    print(conv2.shape)
+    print(conv.shape)
 
     ############################ Fully Connected ##############################
     n_positions = 2  # start and end logits
-    logits = tf.keras.layers.Dense(n_positions, activation='softmax')(conv2)
+    logits = tf.keras.layers.Dense(n_positions, activation='softmax')(conv)
     unstacked_logits = tf.unstack(logits, axis=2)
     (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
     return (start_logits, end_logits)
