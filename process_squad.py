@@ -269,6 +269,8 @@ def _parse_squad_features(input_file,
     example_sets = []
     for split in splits:
         next_idx = idx + math.ceil(split * len(examples))
+        print('idx, next_idx')
+        print(idx, next_idx)
         example_sets.append(examples[idx:next_idx])
         idx = next_idx
     del examples
@@ -296,10 +298,16 @@ def write_squad_features(input_file,
                                                                  output_files, splits, writing_dev,
                                                                  max_examples):
 
+        suffix = ''
+        if FLAGS.fine_tune:
+            suffix = '_fine_tune'
+
         if writing_dev:
-            with tf.gfile.GFile('%s/dev_examples.pickle' % FLAGS.output_dir, 'wb') as out_file:
+            with tf.gfile.GFile('%s/dev_examples%s.pickle' % (FLAGS.output_dir, suffix),
+                                'wb') as out_file:
                 pickle.dump(examples, out_file)
-            with tf.gfile.GFile('%s/dev_features.pickle' % FLAGS.output_dir, 'wb') as out_file:
+            with tf.gfile.GFile('%s/dev_features%s.pickle' % (FLAGS.output_dir, suffix),
+                                'wb') as out_file:
                 pickle.dump(features, out_file)
 
         writer = FeatureWriter(filename=output_file, is_training=is_training)
