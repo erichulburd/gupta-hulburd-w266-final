@@ -25,6 +25,7 @@ if FLAGS.init_checkpoint is not None:
     INIT_CHECKPOINT = '%s/%s' % (FLAGS.output_dir, FLAGS.init_checkpoint)
 
 DEV_FILENAME = make_filename('dev', 1., FLAGS.features_dir, FLAGS.fine_tune, FLAGS.n_examples)
+print('DEV_FILENAE %s' % DEV_FILENAME)
 
 RawResult = collections.namedtuple("RawResult", ["unique_id", "start_logits", "end_logits"])
 
@@ -403,7 +404,7 @@ def main(_):
     model_fn = model_fn_builder(bert_config=bert_config,
                                 init_checkpoint=INIT_CHECKPOINT,
                                 learning_rate=FLAGS.learning_rate,
-                                num_train_steps=0,
+                                num_train_steps=1,
                                 num_warmup_steps=0,
                                 config=config,
                                 use_tpu=FLAGS.use_tpu,
