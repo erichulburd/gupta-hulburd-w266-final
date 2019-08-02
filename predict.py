@@ -451,7 +451,8 @@ def main(_):
                                         seq_length=FLAGS.max_seq_length,
                                         bert_config=bert_config,
                                         is_training=False,
-                                        drop_remainder=False)
+                                        drop_remainder=False,
+                                        fine_tune=FLAGS.fine_tune)
 
     # If running eval on the TPU, you will need to specify the number of
     # steps.
