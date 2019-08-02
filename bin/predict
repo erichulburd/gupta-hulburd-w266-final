@@ -1,0 +1,5 @@
+#! /bin/bash
+
+mkdir out/$1/main
+python3 predict.py --fine_tune --output_dir out/$1 --predictions_output_directory main
+python3 evaluate-v2.0.py data/squad/dev-v2.0.json out/$1/main/predictions.json -o out/$1/main/eval.json -n out/$1/main/null_odds.json -p out/$1/main
