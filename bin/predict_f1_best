@@ -5,5 +5,7 @@ mkdir out/$1/null_score_thresh
 python3 predict.py --fine_tune --output_dir out/$1 --predictions_output_directory null_score_thresh --null_score_diff_threshold $2
 python3 evaluate-v2.0.py data/squad/dev-v2.0.json out/$1/null_score_thresh/predictions.json -o out/$1/null_score_thresh/eval.json -n out/$1/null_score_thresh/null_odds.json -p out/$1/null_score_thresh
 
-gsutil cp -r out/$1/main  gs://w266-final-project-us-central/suhas_gupta/trained_models/trained_models_suhas-gupta/$1/main
+cat out/$1/null_score_thresh/eval.json
+
+gsutil cp -r out/$DIRECTORY/main  gs://w266-final-project-us-central/suhas_gupta/trained_models/trained_models_suhas-gupta/$DIRECTORY/main
 gsutil cp -r out/$1/null_score_thresh  gs://w266-final-project-us-central/suhas_gupta/trained_models/trained_models_suhas-gupta/$1/null_score_thresh

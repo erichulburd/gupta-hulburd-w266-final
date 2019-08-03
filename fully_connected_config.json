@@ -1,4 +1,4 @@
 {
     "model": "fully_connected",
-    "mask_questions": true
+    "mask_questions": false
 }
